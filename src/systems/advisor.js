@@ -1,23 +1,52 @@
-import {ADVISOR as A,METROLOGY as M} from '../constants.js';
+import {ADVISOR as A,METROLOGY as M,INCIDENT2 as Q} from '../constants.js';
+import {CHECKS as CHECKS2} from './incident002.js';
 // AI 부서 회의에 넘길 정보는 "플레이어가 관측한 증거"뿐입니다.
 // 숨은 원인(incident.cause), 장비 숨은 상태(hidden, siteFactors, biasNm), 실제 두께는 절대 넣지 않습니다.
 export const ROLE_LABELS={PE:'공정 엔지니어 (PE)',EE:'설비 엔지니어 (EE)',MET:'계측 엔지니어 (MET)'};
 const r1=v=>Math.round(v*10)/10;
+// INCIDENT 002: 증상(OPEN), 모델 기반 예상 특성, 실행한 검사 결과만. 숨은 원인·미실행 검사·장비 내부 상태 제외.
+function packet002(state,question){
+  const inc=state.incident,r=state.electrical,ids={history:'H','contact-chain':'C','metal-continuity':'W','probe-reseat':'P'},n={};
+  const evidence=inc.checks.map(c=>{const id=`${ids[c.kind]}${n[c.kind]=(n[c.kind]??0)+1}`,res=c.result;
+    if(c.kind==='history')return {id,type:'process-history',records:res.lines,note:res.note};
+    return {id,type:c.kind,label:CHECKS2[c.kind].label,result:res.reading};});
+  for(const m of state.records.filter(x=>x.operationId==='incident2-action'))evidence.push({id:`A${evidence.filter(e=>e.type==='action').length+1}`,type:'action',disposition:m.result.disposition});
+  return {questId:inc.id,quest:inc.title,step:'최종 전기적 테스트',symptom:{measurement:'OPEN',currentFloorA:Q.currentFloorA,conditions:inc.alarm?.conditions??r?.conditions??null},
+    modelExpectation:r?.reference?{vtV:Math.round(r.reference.vtV*1000)/1000,ionMilliA:Math.round(r.reference.ionA*1e6)/1000,note:'공정 이력으로 계산한 예상값이며 실제 측정값이 아님'}:null,
+    evidence,investigationMinutes:inc.minutes,question:String(question??'').slice(0,A.maxTextLength)};
+}
 export function buildEvidencePacket(state,question=''){
+  if(state.incident?.id==='INCIDENT-002')return packet002(state,question);
   const inc=state.incident,field=[...state.records].reverse().find(r=>r.operationId==='field-oxidation'&&!r.superseded);
   const evidence=[];let i=0;
   for(const m of field?.measurements??[])evidence.push({id:`M${++i}`,type:'thickness-measurement',sites:m.observed.map(o=>({site:o.name,nm:o.valueNm})),meanNm:r1(m.meanNm),nonuniformityPct:m.nonuniformity===null?null:r1(m.nonuniformity*100),sitesMeasured:m.observed.length});
   let j=0;for(const r of state.records.filter(r=>r.operationId==='metrology-reference'))evidence.push({id:`R${++j}`,type:'reference-sample',certifiedNm:r.result.certifiedNm,readingsNm:r.result.readings,meanNm:r1(r.result.meanNm),offsetNm:r1(r.result.offsetNm)});
   let k=0;for(const r of state.records.filter(r=>r.operationId==='incident-log'))evidence.push({id:`L${++k}`,type:'furnace-log',recipeMinutes:r.result.recipeMinutes,loggedRunMinutes:r1(r.result.actualMinutes),temperatureC:r.result.temperatureC,ambient:r.result.ambient,note:r.result.note});
   let c=0;for(const r of state.records.filter(r=>r.operationId==='metrology-calibration'))evidence.push({id:`C${++c}`,type:'metrology-calibration'});
-  return {quest:inc?.title??null,step:'Field 산화 (습식)',targetNm:inc?.alarm?r1(inc.alarm.targetNm):null,tolerancePct:10,
+  return {questId:inc?.id??null,quest:inc?.title??null,step:'Field 산화 (습식)',targetNm:inc?.alarm?r1(inc.alarm.targetNm):null,tolerancePct:10,
     recipe:field?{temperatureC:field.input.temperatureC,timeMinutes:field.input.timeMinutes,ambient:field.input.ambient}:null,
     alarm:inc?.alarm?{meanNm:r1(inc.alarm.meanNm),outOfSpecSites:inc.alarm.outSites}:null,evidence,
     metrologyTool:{sitesSinceCalibration:state.metrology.sitesSinceCalibration,calibrations:state.metrology.calibrations,referenceChecks:state.metrology.referenceChecks,repeatability1SigmaNm:Math.max(M.repeatabilityFloorNm,(inc?.alarm?.targetNm??0)*M.repeatabilityFraction)},
     investigationMinutes:inc?.minutes??0,question:String(question??'').slice(0,A.maxTextLength)};
 }
 // 규칙 기반 회의: AI를 쓸 수 없을 때의 대체 수단. 증거가 없으면 판단을 보류합니다.
+function rules002(p){
+  const last=t=>p.evidence.filter(e=>e.type===t).at(-1),cc=last('contact-chain'),mc=last('metal-continuity'),pr=last('probe-reseat'),hist=last('process-history');
+  const isOpen=e=>/OPEN/.test(e.result);
+  const pe=cc&&isOpen(cc)?{hypothesis:'Contact 체인이 OPEN입니다. Contact 바닥 잔사로 S/D와 배선이 끊겼을 가능성이 높습니다.',basis:[cc.id],next:'Contact 식각 시간·과식각 비율과 검사 위치 재검토',confidence:'high'}
+    :mc&&isOpen(mc)?{hypothesis:'배선 패턴이 OPEN입니다. Metal 단선 가능성이 높습니다.',basis:[mc.id],next:'Metal 식각 잔류·박리 기록과 두께 최솟값 재검토',confidence:'high'}
+    :hist?{hypothesis:'공정 검사는 샘플 위치 기준으로 합격했지만, 테스트 소자 위치의 결함까지 보장하지는 않습니다.',basis:[hist.id],next:'Contact 체인 또는 배선 연속성 검사로 소자 내부 연결 확인',confidence:'low'}
+    :{hypothesis:'어느 공정에서 끊겼는지 판단할 근거가 아직 없습니다.',basis:[],next:'공정 이력 검토 후 연결 구조 검사',confidence:'low'};
+  const ee=pr?(/측정됨/.test(pr.result)?{hypothesis:'재접촉 후 전류가 돌아왔습니다. 소자가 아니라 프로브 접촉 문제였을 가능성이 높습니다.',basis:[pr.id],next:'탐침 상태·패드 접촉 점검 후 재측정으로 검증',confidence:'high'}:{hypothesis:'재접촉해도 OPEN입니다. 테스트 장비 접촉 문제 가능성은 낮습니다.',basis:[pr.id],next:'소자 내부 연결(Contact·배선) 검사',confidence:'medium'})
+    :{hypothesis:'측정 탐침 접촉 불량을 배제하지 않았습니다. 가장 싸고 빠른 확인입니다.',basis:[],next:'프로브 재접촉 후 재측정',confidence:'low'};
+  const met=cc&&!isOpen(cc)&&mc&&!isOpen(mc)?{hypothesis:'Contact 체인과 배선 연속성이 모두 정상입니다. 소자 내부 연결은 끊기지 않았습니다.',basis:[cc.id,mc.id],next:'테스트 접촉 쪽을 확인',confidence:'medium'}
+    :cc||mc?{hypothesis:`${[cc&&`Contact 체인: ${cc.result}`,mc&&`배선: ${mc.result}`].filter(Boolean).join(' / ')}`,basis:[cc?.id,mc?.id].filter(Boolean),next:cc&&mc?'결과가 가리키는 원인으로 판정':!cc?'Contact 체인 검사':'배선 연속성 검사',confidence:(cc&&isOpen(cc))||(mc&&isOpen(mc))?'high':'medium'}
+    :{hypothesis:'OPEN 증상만으로는 Contact·배선·프로브 중 어디가 끊겼는지 구분할 수 없습니다.',basis:[],next:'싼 검사(프로브 재접촉)부터, 이후 연결 구조 검사',confidence:'low'};
+  const strong=[pe,ee,met].filter(o=>o.confidence==='high').length;
+  return {opinions:[{role:'PE',...pe},{role:'EE',...ee},{role:'MET',...met}],summary:strong?'근거가 있는 가설이 있습니다. 다른 검사 결과와 모순되지 않는지 확인하세요.':'아직 원인을 확정할 근거가 없습니다. 비용이 적은 검사부터 진행하세요.'};
+}
 export function ruleBasedMeeting(p){
+  if(p.questId==='INCIDENT-002')return rules002(p);
   const ref=p.evidence.filter(e=>e.type==='reference-sample').at(-1),log=p.evidence.filter(e=>e.type==='furnace-log').at(-1);
   const maps=p.evidence.filter(e=>e.type==='thickness-measurement'&&e.sitesMeasured===5),map=maps.at(-1);
   let outlier=null;if(map){const v=map.sites.map(s=>s.nm).sort((a,b)=>a-b),med=v[2];const far=map.sites.map(s=>({...s,d:s.nm-med})).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d))[0];if(Math.abs(far.d)>Math.max(5,.05*med))outlier=far;}
@@ -33,6 +62,18 @@ export function ruleBasedMeeting(p){
   const strong=[pe,ee,met].filter(o=>o.confidence==='high').length;
   return {opinions:[{role:'PE',...pe},{role:'EE',...ee},{role:'MET',...met}],summary:strong?'근거가 확보된 가설이 있습니다. 서로 모순되지 않는지 확인하고 판정하세요.':'아직 결정적인 증거가 없습니다. 부서별 제안 중 비용이 적은 확인부터 진행하세요.'};
 }
+export const SYSTEM_PROMPT_002=`너는 반도체 팹의 긴급 품질 회의에 참석한 세 명의 엔지니어다: PE(공정), EE(설비·테스트 장비), MET(계측·테스트 구조).
+상황: 교육용 시뮬레이터에서 완성된 NMOS의 최종 전기적 테스트 결과가 OPEN(전류 측정 하한 미만)이다. 원인 후보는 소자 내부 연결 결함 또는 테스트 접촉 문제다.
+규칙:
+1. 사용자 메시지의 JSON "증거 패킷"에 있는 정보만 근거로 삼는다. 실행하지 않은 검사의 결과를 추측해 사실처럼 말하지 않는다.
+2. 각 주장마다 근거로 쓴 증거 id(H1, C1, W1, P1, A1 등)를 basis에 적는다. 근거가 없으면 basis를 빈 배열로 두고 confidence를 low로 한다.
+3. modelExpectation은 공정 모델로 계산한 예상값이지 실제 측정값이 아니다. 이를 소자가 정상이라는 증거로 쓰지 않는다.
+4. 정답을 단정하지 않는다. 가설, 다음에 확인할 검사, 검사 비용(시간)을 고려한 순서를 제안한다.
+5. 이미 끊긴 배선이나 Contact를 즉시 복구할 수 있다고 말하지 않는다.
+6. 플레이어 질문(question)이 있으면 summary에서 짧게 답한다.
+7. 한국어, 짧게. 아래 JSON만 출력한다(설명·코드블록 없이).
+{"opinions":[{"role":"PE","hypothesis":"...","basis":["C1"],"next":"...","confidence":"low|medium|high"},{"role":"EE",...},{"role":"MET",...}],"summary":"..."}`;
+export const systemPromptFor=p=>p?.questId==='INCIDENT-002'?SYSTEM_PROMPT_002:SYSTEM_PROMPT;
 export const SYSTEM_PROMPT=`너는 반도체 팹의 긴급 품질 회의에 참석한 세 명의 엔지니어다: PE(공정), EE(설비), MET(계측).
 상황: 교육용 시뮬레이터의 NMOS Field 습식 산화 후 두께 측정에서 OOS 경고가 떠서 Lot을 HOLD했다.
 규칙:
@@ -56,7 +97,7 @@ export function sanitizeMeeting(raw,packet){
 }
 export async function callClaude(packet,{apiKey,model=A.defaultModel,fetchFn=globalThis.fetch}){
   const res=await fetchFn(A.apiUrl,{method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'anthropic-version':A.apiVersion,'anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model,max_tokens:A.maxTokens,system:SYSTEM_PROMPT,messages:[{role:'user',content:`증거 패킷:\n${JSON.stringify(packet)}`}]})});
+    body:JSON.stringify({model,max_tokens:A.maxTokens,system:systemPromptFor(packet),messages:[{role:'user',content:`증거 패킷:\n${JSON.stringify(packet)}`}]})});
   const body=await res.json().catch(()=>null);
   if(!res.ok)throw new Error(body?.error?.message??`API 오류 (${res.status})`);
   const text=(body?.content??[]).filter(b=>b.type==='text').map(b=>b.text).join('');
@@ -76,7 +117,7 @@ export async function callGemini(packet,{apiKey,model=A.geminiModel,fetchFn=glob
   const id=String(model).replace(/^models\//,'');
   if(!/^[A-Za-z0-9._-]+$/.test(id))throw new Error('모델 이름 형식이 올바르지 않습니다.');
   const res=await fetchFn(`${A.geminiBase}/models/${id}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':apiKey},
-    body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM_PROMPT}]},contents:[{role:'user',parts:[{text:`증거 패킷:\n${JSON.stringify(packet)}`}]}],
+    body:JSON.stringify({systemInstruction:{parts:[{text:systemPromptFor(packet)}]},contents:[{role:'user',parts:[{text:`증거 패킷:\n${JSON.stringify(packet)}`}]}],
       generationConfig:{responseMimeType:'application/json',maxOutputTokens:A.geminiMaxTokens,temperature:.4}})});
   const body=await res.json().catch(()=>null);
   if(!res.ok)throw new Error(body?.error?.message??`API 오류 (${res.status})`);

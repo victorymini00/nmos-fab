@@ -1,0 +1,24 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>INCIDENT 002 검증</title><div id="app"></div><div style="position:fixed;right:30px;top:100px;z-index:20;display:flex;gap:6px"><button data-cause="contact-residue">Contact 잔사</button><button data-cause="metal-open">배선 단선</button><button data-cause="probe-contact">프로브</button></div><script type="module">
+import '/src/ui/styles.css';
+import flow from '/src/data/process_flow.json';
+import layout from '/src/data/map_layout.json';
+import {createUI} from '/src/ui/panels.js';
+import {electricalPanel} from '/src/ui/electricalPanel.js';
+import {bindIncident} from '/src/ui/incidentPanel.js';
+import {bindIncident002} from '/src/ui/incident002Panel.js';
+import {bindAdvisor} from '/src/ui/advisorPanel.js';
+import {applyAction,createLot,currentTask,latestRecord,recommendedEtchMinutes,recommendedPatternEtchMinutes} from '/src/systems/runsheet.js';
+// 검증용: 퀘스트 002로 시작해 최종 전기적 테스트 직전까지 기준 조건으로 진행한 뒤 테스트 장비 화면을 엽니다.
+const at=()=>new Date().toISOString();
+function input(s,op){const i=Object.fromEntries(op.parameters.map(p=>[p.key,p.target]));if(op.modelId==='boe')i.minutes=recommendedEtchMinutes(s);if(op.modelId==='pattern-etch')i.minutes=recommendedPatternEtchMinutes(s,op);return i;}
+function until(stage,s){while(currentTask(s,flow).stage.number<stage){const op=currentTask(s,flow).operation,r=latestRecord(s,flow);s=applyAction(s,flow,!r?{type:'execute',equipmentId:op.equipmentId,input:input(s,op)}:op.measurementRequired&&!r.measurement?{type:'measure',equipmentId:op.measurementEquipmentId}:{type:'sign',equipmentId:op.measurementRequired?op.measurementEquipmentId:op.equipmentId,name:'QA',acknowledgeDefects:true},at());}return s;}
+let state;const noop=()=>{};const ui=createUI(document.querySelector('#app'),layout,{onInteract:noop,onClose:noop,onReset:noop,onRunsheet:noop,onSection:noop,onGuide:noop});
+function act(a){try{state=applyAction(state,flow,{...a,equipmentId:'tester'},at());render();}catch(e){ui.content.querySelector('#action-error').textContent=e.message;}}
+function global(a){try{state=applyAction(state,flow,a,at());render();}catch(e){ui.content.querySelector('#action-error').textContent=e.message;}}
+function render(){ui.show('전기적 테스트','QA · INCIDENT 002',true);ui.content.innerHTML=electricalPanel(state,flow,layout);
+  ui.content.querySelector('#run-electrical')?.addEventListener('click',()=>act({type:'execute'}));
+  bindIncident(ui.content,{global,act,newIncidentLot:noop});bindIncident002(ui.content,{global,act});bindAdvisor(ui.content,{global,getState:()=>state,rerender:render});
+  ui.content.querySelector('#sign-form')?.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.currentTarget);act({type:'sign',name:d.get('signature'),acknowledgeDefects:d.get('acknowledge')==='on'});});}
+function quest(cause){state=until(11,applyAction(createLot(),flow,{type:'start-incident',quest:'002',cause},at()));render();}
+for(const b of document.querySelectorAll('[data-cause]'))b.onclick=()=>quest(b.dataset.cause);quest('metal-open');
+</script></html>

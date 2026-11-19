@@ -4,8 +4,9 @@ import {coatResist,alignmentResult,developResist,etchOxide} from './lithography.
 import {depositFilm,implantPhosphorus,annealImplant,etchPattern} from './fabrication.js';
 import {buildReferenceLot,testElectrical} from './electrical.js';
 import {createMetrologyState,isThicknessOperation,measureSites,checkReference,calibrate} from './metrology.js';
-import {DEPOSITION as D,ADVISOR} from '../constants.js';
+import {DEPOSITION as D,ADVISOR,INCIDENT2} from '../constants.js';
 import {validateMeetingAction} from './advisor.js';
+import * as Q2 from './incident002.js';
 import {startIncident,applyOxidationFault,afterMeasurement,holdLot,onReferenceCheck,inspectLog,diagnose,changeDisposition,signGate} from './incidents.js';
 export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState(),incident:null};}
 export function operations(flow){return flow.stages.flatMap(stage=>stage.operations.map(operation=>({stage,operation})));}
@@ -23,7 +24,7 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
   const {stage,operation:op}=task;
   const record=latestRecord(state,flow);
   const log=(title,operationId,equipmentId,result,input={})=>state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:title,operationId,equipmentId,input,result,executedAt:now,measurement:null,signature:null,autoCompleted:true,superseded:false});
-  if(action.type==='start-incident'){startIncident(state,action,now);log('돌발 상황 퀘스트 시작','incident-start','hud',{kind:'incident-start',title:state.incident.title});return state;}
+  if(action.type==='start-incident'){startIncident(state,action,now);log('돌발 상황 퀘스트 시작','incident-start','hud',{kind:'incident-start',title:`${state.incident.id} ${state.incident.title}`});return state;}
   if(action.type==='incident-hold'){holdLot(state);log('Lot HOLD','incident-hold','metrology',{kind:'incident-hold'});return state;}
   if(action.type==='inspect-log'){
     if(action.equipmentId!=='furnace')throw new Error('산화로에서 공정 로그를 조회하세요.');
@@ -34,7 +35,10 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     if(state.incident.mode==='no-ai')throw new Error('이번 실험에서는 긴급 회의를 쓰지 않습니다.');
     const meeting={...validateMeetingAction(action),at:now};state.incident.meetings=[...(state.incident.meetings??[]),meeting];state.incident.minutes+=ADVISOR.meetingMinutes;
     log('긴급 부서 회의','incident-meeting','metrology',{kind:'incident-meeting',...meeting});return state;}
-  if(action.type==='incident-diagnose'){diagnose(state,action,now);log('원인 판정','incident-diagnosis','metrology',{kind:'incident-diagnosis',cause:action.cause,disposition:action.disposition,...state.incident.evaluation});return state;}
+  if(action.type==='incident-diagnose'){diagnose(state,action,now);log('원인 판정','incident-diagnosis',Q2.is002(state)?'tester':'metrology',{kind:'incident-diagnosis',cause:action.cause,disposition:action.disposition,...(state.incident.evaluation??{basis:state.incident.diagnosisBasis?.status})});return state;}
+  if(action.type==='incident2-check'){if(!Q2.is002(state))throw new Error('INCIDENT 002에서만 쓰는 검사입니다.');if(action.equipmentId!=='tester')throw new Error('전기적 테스트 장비에서 검사하세요.');log('추가 검사','incident2-check','tester',Q2.check(state,action.check,now),{check:action.check});return state;}
+  if(action.type==='incident2-act'){if(!Q2.is002(state))throw new Error('INCIDENT 002에서만 쓰는 조치입니다.');if(action.equipmentId!=='tester')throw new Error('전기적 테스트 장비에서 조치하세요.');log('조치 실행','incident2-action','tester',Q2.act(state,now));return state;}
+  if(action.type==='incident2-verify'){if(!Q2.is002(state))throw new Error('INCIDENT 002에서만 쓰는 검증입니다.');if(action.equipmentId!=='tester')throw new Error('전기적 테스트 장비에서 검증하세요.');log('조치 검증','incident2-verify','tester',Q2.verifyScrap(state,now));return state;}
   if(action.type==='incident-disposition'){changeDisposition(state,action.disposition);log('조치 변경','incident-disposition','metrology',{kind:'incident-disposition',disposition:action.disposition});return state;}
   if(action.type==='check-reference'||action.type==='calibrate'){
     if(action.equipmentId!=='metrology')throw new Error('두께 측정 장비에서만 실행할 수 있습니다.');
@@ -52,9 +56,10 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:'포토 재작업',operationId:'photo-rework',equipmentId:'coater',input:{action:`${group} PR 제거 후 재작업`},result:{penaltyPoints:P.reworkPenalty},executedAt:now,measurement:null,signature:null,rework:true,superseded:false});
   }else if(action.type==='execute'){
     if(action.equipmentId!==op.equipmentId)throw new Error('현재 공정에 지정된 장비를 사용하세요.');
-    if(record&&!op.measurementRequired)throw new Error('이미 실행했습니다. 확인 서명을 완료하세요.');
+    const retest=op.modelId==='electrical'&&!!record&&Q2.canRetest(state);
+    if(record&&!op.measurementRequired&&!retest)throw new Error('이미 실행했습니다. 확인 서명을 완료하세요.');
     if(record&&!record.measurement)throw new Error('이전 공정 결과를 먼저 측정한 뒤 재작업하세요.');
-    if(record&&!['deal-grove','boe','gate-oxide','deposit','pattern-etch'].includes(op.modelId))throw new Error('중복 실행할 수 없습니다. 포토 공정은 코터에서 재작업을 시작하세요.');
+    if(record&&!retest&&!['deal-grove','boe','gate-oxide','deposit','pattern-etch'].includes(op.modelId))throw new Error('중복 실행할 수 없습니다. 포토 공정은 코터에서 재작업을 시작하세요.');
     for(const p of op.parameters){const value=action.input?.[p.key];if(p.options?!p.options.includes(value):(!Number.isFinite(value)||value<p.min||value>p.max))throw new Error(`${p.label} 입력 범위를 확인하세요.`);}
     let input={},result={cleaned:true};
     if(op.modelId==='deal-grove'){
@@ -74,7 +79,8 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     }else if(op.modelId==='electrical'){
       input=structuredClone(op.testConditions);
       const reference=buildReferenceLot(flow,createLot(),applyAction);
-      result=testElectrical(state,reference,input,op.specification);state.electrical=result;
+      result=Q2.applyTestLayer(state,testElectrical(state,reference,input,op.specification),now);state.electrical=result;
+      if(retest){state.incident.minutes+=INCIDENT2.minutes.retest;Q2.verifyRetest(state,result,now);}
     }else if(op.modelId==='deposit'){
       if(state.prNm>0)throw new Error('증착 전에 PR을 제거하세요.');
       input=Object.fromEntries(op.parameters.map(p=>[p.key,action.input[p.key]]));
@@ -132,7 +138,7 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     if(record)record.superseded=true;
     state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:stage.title,operationId:op.id,photoGroup:op.photoGroup,equipmentId:op.equipmentId,input,result,executedAt:now,measurement:null,signature:null,rework:!!record,autoCompleted:!!op.autoAdvance,superseded:false});
     if(op.modelId==='electrical')state.records.at(-1).measurement={...structuredClone(result),equipmentId:op.equipmentId,measuredAt:now,pass:result.grade!=='F'};
-    if(record){state.reworkCount++;state.penaltyPoints+=P.reworkPenalty;}
+    if(record&&!retest){state.reworkCount++;state.penaltyPoints+=P.reworkPenalty;}
     if(op.autoAdvance)state.cursor++;
   }else if(action.type==='measure'){
     if(!op.measurementRequired||action.equipmentId!==op.measurementEquipmentId)throw new Error('지정된 두께 측정 장비를 사용하세요.');

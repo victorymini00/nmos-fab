@@ -12,7 +12,7 @@ function evidenceList(state){
 }
 // 계측 장비 화면 위쪽에 붙는 퀘스트 영역
 export function incidentSection(state){
-  const inc=state.incident;if(!inc||inc.phase==='missed')return '';
+  const inc=state.incident;if(inc?.id!=='INCIDENT-001'||inc.phase==='missed')return '';
   const head=`<div class="incident-head"><span>FAB INCIDENT · ${esc(inc.id)}</span><strong>${esc(inc.title)}</strong></div>`;
   if(inc.phase==='armed')return `<section class="incident armed">${head}<p>돌발 상황 퀘스트가 진행 중이에요. 이번 산화막 측정에서 무언가 이상할 수 있어요. 측정 지점은 신중하게 고르세요.</p></section>`;
   if(inc.phase==='alarm')return `<section class="incident alarm">${head}<p class="oos">OOS 경고 · 측정 결과가 규격을 벗어났어요</p><p>목표 ${n(inc.alarm.targetNm)} nm ±10% · 측정 평균 ${n(inc.alarm.meanNm)} nm${inc.alarm.outSites.length?` · 규격 밖 지점: ${inc.alarm.outSites.join(', ')}`:''}</p><p>원인을 모르는 상태에서 다음 Run 조건을 바꾸거나 그대로 진행하면 안 돼요. 먼저 Lot을 보류하고 조사하세요.</p><button id="incident-hold" class="primary">Lot HOLD · 원인 조사 시작</button></section>`;
@@ -24,12 +24,12 @@ export function incidentSection(state){
     <details><summary>조치 변경</summary><form id="disposition-form">${Object.entries(DISPOSITIONS).map(([k,d])=>`<label class="check"><input type="radio" name="disposition" value="${k}" ${k===inc.disposition?'checked':''}>${d}</label>`).join('')}<button class="secondary">조치 변경 (점수는 그대로)</button></form></details>${inc.disposition==='scrap'?'<p>퀘스트로 새 Lot을 다시 시작하려면 Runsheet(R)의 퀘스트 시작 폼을 쓰세요.</p>':''}</section>`;
 }
 export function furnaceLogSection(state){
-  const inc=state.incident;if(!inc||!['hold','resolved'].includes(inc.phase))return '';
+  const inc=state.incident;if(inc?.id!=='INCIDENT-001'||!['hold','resolved'].includes(inc.phase))return '';
   const log=lastOf(state,'incident-log');
   return `<section class="incident hold"><div class="incident-head"><span>FAB INCIDENT · ${esc(inc.id)}</span><strong>산화로 공정 로그</strong></div>${log?`<p>레시피: ${log.result.temperatureC}°C · ${log.result.recipeMinutes}분 · ${log.result.ambient==='wet'?'습식':'건식'}<br>장비 기록: 실제 가동 ${n(log.result.actualMinutes)}분</p><p><strong>${esc(log.result.note)}</strong></p>`:'<p>온도·가스·단계 시간 기록을 조회해서 레시피대로 돌았는지 확인해요.</p>'}${inc.phase==='hold'?`<button id="inspect-log" class="${log?'secondary':'primary'}">공정 로그 조회 · ${I.logMinutes}분</button>`:''}</section>`;
 }
 export function incidentReport(state){
-  const inc=state.incident;if(!inc)return '';
+  const inc=state.incident;if(inc?.id!=='INCIDENT-001')return '';
   if(inc.phase==='missed')return `<section class="incident alarm"><div class="incident-head"><span>FAB INCIDENT · ${esc(inc.id)}</span><strong>놓친 결함</strong></div><p>Field 산화막에 <strong>${CAUSES[inc.cause].label}</strong>이 있었지만, 측정에서 경고가 뜨지 않은 채 서명했어요. 일부 지점만 측정하면 국부 이상을 놓칠 수 있어요.</p></section>`;
   if(inc.phase!=='resolved')return '';
   const e=inc.evaluation;return `<section class="incident resolved"><div class="incident-head"><span>FAB INCIDENT · ${esc(inc.id)}</span><strong>퀘스트 결과 ${e.score} / 100</strong></div><p>실제 원인 ${CAUSES[inc.cause].label} · 판정 ${CAUSES[inc.diagnosis].label} (${e.causeOk?'정답':'오답'}) · 조치 ${DISPOSITIONS[inc.disposition]} · 증거 ${inc.evidence.map(k=>EVIDENCE_LABELS[k]).join(', ')||'없음'} · 조사 ${e.minutes}분</p></section>`;
@@ -44,15 +44,15 @@ export function bindIncident(content,{global,act,newIncidentLot}){
 
 // 퀘스트 시작 폼: 실험 조건(AI 회의 사용 여부)과 참가자 코드
 export function questStartForm(){
-  return `<form id="quest-start" class="quest-start-form"><label>참가자 코드 (선택, 실명 대신 P01 같은 코드)<input name="participant" maxlength="20" placeholder="P01"></label>
+  return `<form id="quest-start" class="quest-start-form"><fieldset><legend>퀘스트</legend><label class="check"><input type="radio" name="quest" value="001" checked><span><strong>INCIDENT 001</strong> · 누가 산화막을 망쳤을까? (Field 산화 직후)</span></label><label class="check"><input type="radio" name="quest" value="002"><span><strong>INCIDENT 002</strong> · 완성된 NMOS가 작동하지 않는다 (최종 전기적 테스트)</span></label></fieldset><label>참가자 코드 (선택, 실명 대신 P01 같은 코드)<input name="participant" maxlength="20" placeholder="P01"></label>
   <fieldset><legend>실험 조건</legend><label class="check"><input type="radio" name="mode" value="ai" checked>AI 긴급 회의 사용</label><label class="check"><input type="radio" name="mode" value="no-ai">AI 회의 없이 혼자 해결</label></fieldset>
-  <details><summary>진행자 설정 (참가자에게 보여주지 마세요)</summary><label>숨은 원인<select name="cause"><option value="">무작위</option><option value="bias">A 계측기 편향</option><option value="overrun">B 산화로 과성장</option><option value="local">C 국부 두께 이상</option></select></label></details>
+  <details><summary>진행자 설정 (참가자에게 보여주지 마세요)</summary><label>숨은 원인<select name="cause"><option value="">무작위</option><optgroup label="INCIDENT 001"><option value="bias">A 계측기 편향</option><option value="overrun">B 산화로 과성장</option><option value="local">C 국부 두께 이상</option></optgroup><optgroup label="INCIDENT 002"><option value="contact-residue">Contact 식각 잔사</option><option value="metal-open">Metal 배선 단선</option><option value="probe-contact">프로브 접촉 불량</option></optgroup></select></label><p class="muted">선택한 퀘스트와 맞지 않는 원인은 무시하고 무작위로 정해요.</p></details>
   <button class="primary">퀘스트로 새 Lot 시작</button></form>`;
 }
-export function readQuestStart(form){const d=new FormData(form);return {participant:String(d.get('participant')||''),mode:d.get('mode')==='no-ai'?'no-ai':'ai',cause:d.get('cause')||undefined};}
+export function readQuestStart(form){const d=new FormData(form);return {quest:d.get('quest')==='002'?'002':'001',participant:String(d.get('participant')||''),mode:d.get('mode')==='no-ai'?'no-ai':'ai',cause:d.get('cause')||undefined};}
 const LOG='nmos-fab-experiment-log';
 export function readExperimentLog(){try{const v=JSON.parse(localStorage.getItem(LOG)??'[]');return Array.isArray(v)?v:[];}catch{return [];}}
-export function appendExperimentLog(row){if(!row)return;try{const rows=readExperimentLog();rows.push(row);localStorage.setItem(LOG,JSON.stringify(rows.slice(-500)));}catch{}}
+export function appendExperimentLog(row){if(!row)return;try{const rows=readExperimentLog(),key=r=>`${r.quest??'INCIDENT-001'}|${r.startedAt??''}|${r.resolvedAt}|${r.participant}`;if(rows.some(r=>key(r)===key(row)))return;rows.push(row);localStorage.setItem(LOG,JSON.stringify(rows.slice(-500)));}catch{}}
 const pct=v=>v===null?'—':(v*100).toFixed(0)+'%',num=(v,d=1)=>v===null?'—':v.toFixed(d);
 export function experimentPanel(){
   const rows=readExperimentLog(),s=summarize(rows);

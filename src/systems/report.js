@@ -9,6 +9,9 @@ export function describeResult(r){
   if(r.kind==='incident-hold')return 'OOS 경고 · Lot HOLD';
   if(r.kind==='incident-log')return `레시피 ${r.recipeMinutes}분 / 실제 ${Number(r.actualMinutes).toFixed(0)}분\n${r.note}`;
   if(r.kind==='incident-diagnosis')return `판정 ${r.cause} / 조치 ${r.disposition}\n점수 ${r.score} (원인 ${r.causeOk?'정답':'오답'})`;
+  if(r.kind==='incident2-check')return `${r.label} (${r.minutes}분)\n${r.reading??(r.lines?r.lines.map(l=>`${l.step}: ${l.inspected?(l.pass?'합격':'불합격'):'기록 없음'}`).join(' / '):'')}`;
+  if(r.kind==='incident2-action')return `조치: ${r.disposition} (${r.minutes}분)\n${r.note}`;
+  if(r.kind==='incident2-verify')return `검증 ${r.ok?'성공':'실패'}\n${r.note}`;
   if(r.kind==='incident-meeting')return `긴급 회의 (${r.source==='ai'?'AI '+r.model:'규칙 기반'})${r.question?'\n질문: '+r.question:''}\n${r.opinions.map(o=>`${o.role}: ${o.hypothesis} [근거 ${o.basis.join(',')||'없음'}]`).join('\n')}`;
   if(r.kind==='incident-disposition')return `조치 변경: ${r.disposition}`;
   if(r.kind==='metrology-calibration')return '계측 장비 교정 · 편향 초기화';

@@ -153,3 +153,15 @@ export const ADVISOR = Object.freeze({
   apiUrl: 'https://api.anthropic.com/v1/messages', apiVersion: '2023-06-01',
   maxTextLength: 400, roles: ['PE', 'EE', 'MET']
 });
+
+// INCIDENT 002 (최종 테스트 OPEN). 교육용 가상 검사 모델이며 실제 파라메트릭 테스터를 재현하지 않습니다. 모든 값 검증 필요.
+export const INCIDENT2 = Object.freeze({
+  // 검사 시간 [게임 분]
+  minutes: {history: 5, 'contact-chain': 15, 'metal-continuity': 10, 'probe-reseat': 5, action: {'reseat-retest': 5, 'scrap-contact': 10, 'scrap-metal': 10, 'ship-as-is': 2}, retest: 5},
+  // 테스트 구조: Contact 체인(직렬 Contact 수), 배선 연속성 패턴 길이 [µm], OPEN 판정 기준 [Ω], 전류 측정 하한 [A]
+  contactChainCount: 100, serpentineLengthUm: 5000, openOhm: 1e6, currentFloorA: 1e-9,
+  // 측정 반복 산포(상대 1σ), 교육용
+  readNoiseFraction: .02,
+  // 배점
+  points: {cause: 40, disposition: 20, keyEvidence: 20, verification: 10, efficiency: 10}, unnecessaryPenalty: 3, freeMinutes: 40, minutePenalty: .5
+});

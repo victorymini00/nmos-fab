@@ -74,7 +74,8 @@ export function buildReferenceLot(flow,initial,transition){
 }
 export function gradeDevice(actual,reference,state,spec){
   const vtDeltaV=actual.vtV-reference.vtV,ionRelativeError=actual.ionA===null?null:(actual.ionA-reference.ionA)/reference.ionA;
-  const failedInspections=state.records.filter(r=>!r.superseded&&r.measurement?.pass===false).length;
+  // 공정 검사 불합격만 셉니다. 전기적 테스트 자체의 이전 측정(재측정 전 OPEN 등)은 제외.
+  const failedInspections=state.records.filter(r=>!r.superseded&&r.result?.kind!=='electrical'&&r.measurement?.pass===false).length;
   const deductions={vt:Math.min(C.vtWeight,C.vtWeight*Math.abs(vtDeltaV)/spec.vtToleranceV),
     current:ionRelativeError===null?C.ionWeight:Math.min(C.ionWeight,C.ionWeight*Math.abs(ionRelativeError)/spec.ionToleranceFraction),
     uniformity:Math.min(C.uniformityWeight,Math.max(0,actual.parameters.uniformity-reference.parameters.uniformity)*100),

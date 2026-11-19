@@ -11,6 +11,7 @@ import {bindMetrology,bindToolActions} from './ui/metrologyPanel.js';
 import {bindIncident,questStartForm,experimentPanel,bindExperiment,readQuestStart,appendExperimentLog} from './ui/incidentPanel.js';
 import {experimentRow} from './systems/experiment.js';
 import {bindAdvisor} from './ui/advisorPanel.js';
+import {bindIncident002} from './ui/incident002Panel.js';
 import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js';
 import {bindReportExport} from './ui/reportExport.js';
 import {signedElectrical} from './systems/report.js';
@@ -30,8 +31,8 @@ function refresh(){
   const task=currentTask(state,flow),r=latestRecord(state,flow),next=nextEquipment(state,flow);
   const name=layout.equipment.find(e=>e.id===next)?.name;
   const text=!task?`${state.electrical.grade} 등급 · Runsheet에서 전체 보고서를 저장할 수 있습니다.`:task.operation.modelId==='electrical'?(r?'전기적 결과를 확인하고 최종 서명하세요.':'전기적 테스트 장비에서 Vt와 Id–Vg를 측정하세요.'):r?(task.operation.measurementRequired?(r.measurement?(r.measurement.pass?'검사 합격 · 계측 장비에서 확인 서명하세요.':task.operation.acceptDefects?'결함 확인 · 인지 서명으로 계속하거나 재작업하세요.':'조건 이탈 · 재작업 또는 새 Lot이 필요합니다.'):`${name}에서 측정·검사하세요.`):'공정 완료 · 확인 서명하세요.'):`${name}에서 ${task.operation.modelId==='exposure'?'마스크 정렬과 노광':'현재 작업'}을 시작하세요.`;
-  const inc=state.incident,questText=inc?.phase==='alarm'?'⚠ OOS 경고! 계측 장비에서 Lot을 HOLD하고 원인을 조사하세요.':inc?.phase==='hold'?`HOLD 중 · 증거를 모아 원인을 판정하세요 (조사 ${inc.minutes}분)`:null;
-  ui.mission(task?`${task.stage.number}. ${task.stage.title}`:'NMOS 제작 · 테스트 완료',questText??text,inc?.phase==='alarm'||inc?.phase==='hold'?'metrology':next);
+  const inc=state.incident,two=inc?.id==='INCIDENT-002',questText=inc?.phase==='alarm'?(two?'⚠ OPEN 감지! 전기적 테스트 장비에서 Lot을 HOLD하고 원인을 조사하세요.':'⚠ OOS 경고! 계측 장비에서 Lot을 HOLD하고 원인을 조사하세요.'):inc?.phase==='hold'?`HOLD 중 · 진단 미완료 · 증거를 모아 원인을 판정하세요 (조사 ${inc.minutes}분)`:two&&inc?.phase==='action'?'판정 완료 · 조치를 실행하고 검증하세요.':null;
+  ui.mission(task?`${task.stage.number}. ${task.stage.title}`:'NMOS 제작 · 테스트 완료',questText??text,['alarm','hold'].includes(inc?.phase)||(two&&inc?.phase==='action')?(two?'tester':'metrology'):next);
   ui.mini(crossSection(state,flow,true));world?.setGuidance(next);
   world?.setEquipmentStatus(equipmentStatuses(state,flow,layout.equipment.map(e=>e.id)));
 }
@@ -51,6 +52,7 @@ function renderView(){
     else ui.content.querySelector('#measure')?.addEventListener('click',()=>act({type:'measure'}));
     bindToolActions(ui.content,act);
     bindIncident(ui.content,{global,act,newIncidentLot});
+    bindIncident002(ui.content,{global,act});
     bindAdvisor(ui.content,{global,getState:()=>state,rerender:renderView});
     bindAlignment(ui.content);
     const operation=currentTask(state,flow)?.operation;
@@ -61,7 +63,7 @@ function renderView(){
     bindReportExport(ui.content,state,flow,layout);
   }else if(view.type==='runsheet'){
     ui.show('Lot 공정 지시서','RUNSHEET / NMOS-001',true);
-    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><section class="incident armed"><div class="incident-head"><span>FAB INCIDENT · 001</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}`:runsheetPanel(state,flow,layout);
+    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><section class="incident armed"><div class="incident-head"><span>FAB INCIDENT</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}`:runsheetPanel(state,flow,layout);
     bindReportExport(ui.content,state,flow,layout);
     ui.content.querySelector('#quest-start')?.addEventListener('submit',e=>{e.preventDefault();newIncidentLot(readQuestStart(e.currentTarget));});
     bindExperiment(ui.content,renderView);
@@ -77,18 +79,20 @@ function perform(action){
     // UI cannot apply a process remotely, including after the current task changes.
     if(world?.getNearby()?.id!==action.equipmentId)throw new Error('해당 장비 근처에서만 실행할 수 있습니다.');
     const at=new Date().toISOString();state=applyAction(state,flow,action,at);
-    ui.saved(persistence.record(action,at));if(action.type==='execute')world?.pulse(action.equipmentId);refresh();renderView();
+    ui.saved(persistence.record(action,at));if(action.type==='execute')world?.pulse(action.equipmentId);logExperiment();refresh();renderView();
   }catch(error){const el=ui.content.querySelector('#action-error');if(el)el.textContent=error.message;else ui.message(error.message);}
 }
 // 장비 근처가 아니어도 되는 동작(퀘스트 시작·HOLD·판정)
 function global(action){
-  try{const at=new Date().toISOString();state=applyAction(state,flow,action,at);ui.saved(persistence.record(action,at));if(action.type==='incident-diagnose')appendExperimentLog(experimentRow(state));refresh();renderView();}
+  try{const at=new Date().toISOString();state=applyAction(state,flow,action,at);ui.saved(persistence.record(action,at));logExperiment();refresh();renderView();}
   catch(error){const el=ui.content.querySelector('#action-error');if(el)el.textContent=error.message;else ui.message(error.message);}
 }
 function newIncidentLot(options={}){
   state=createLot();ui.saved(persistence.reset());world?.reset();global({type:'start-incident',...options});
   ui.message('돌발 상황 퀘스트를 시작했어요. 평소처럼 공정을 진행하세요.');
 }
+// 퀘스트 평가가 확정되면 실험 기록에 한 번만 추가(001은 판정 시, 002는 검증 완료 시)
+function logExperiment(){const row=experimentRow(state);if(row&&(state.incident.id!=='INCIDENT-002'||state.incident.phase==='closed'))appendExperimentLog(row);}
 function interact(){if(ui.isOpen)return;const e=world?.getNearby();if(e)open('equipment',e);}
 try{
   world=createWorld(ui.container,layout,{onNearby:e=>ui.nearby(e),onFrame:s=>ui.update(s),onMessage:t=>ui.message(t)});

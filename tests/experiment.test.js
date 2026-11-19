@@ -20,6 +20,6 @@ test('no-AI mode blocks meetings; rows capture mode, participant code, accuracy 
   assert.equal(b.mode,'no-ai');assert.equal(b.meetings,0);assert.equal(b.causeOk,false);
   assert.equal(experimentRow(createLot()),null);
   const csv=toCsv([a,b]).split('\n');assert.equal(csv[0],EXPERIMENT_COLUMNS.join(','));assert.equal(csv.length,3);
-  assert.equal(toCsv([{...a,participant:'P,"1"'}]).split('\n')[1].split(',')[0],'"P');
+  assert.ok(toCsv([{...a,participant:'P,"1"'}]).split('\n')[1].includes(',"P,""1""",'));assert.equal(a.quest,'INCIDENT-001');
   const s=summarize([a,b]);assert.equal(s.ai.n,1);assert.equal(s.ai.accuracy,1);assert.equal(s.noAi.accuracy,0);
 });
