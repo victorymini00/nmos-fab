@@ -1,0 +1,30 @@
+{
+  "$comment": "공정 개선 실험실(Poly LPCVD) 목표·허용범위·시간 모델. 모든 값은 교육용 설정이며 검증 필요.",
+  "operationId": "poly-deposition",
+  "material": "poly",
+  "goal": {
+    "targetThicknessNm": 200,
+    "thicknessTolerancePct": 5,
+    "maxNonuniformityPct": 3,
+    "minSitesForUniformity": 5,
+    "objective": "두께·균일도 조건을 만족하면서 처리시간(processMinutes) 최소화"
+  },
+  "processTime": {
+    "fixedOverheadMinutes": 25,
+    "stabilizationMinutesPerC": 2,
+    "stabilizationReferenceSpreadC": 3,
+    "note": "처리시간 = 증착 시간 + 고정 준비시간(로딩·승온) + 온도 안정화 시간. 온도 편차를 기준보다 줄이려면 구역 온도를 맞추는 안정화 시간이 더 든다고 가정."
+  },
+  "limits": {
+    "maxExperiments": 6,
+    "maxBaselines": 10,
+    "temperatureC": [580, 650],
+    "minutes": [1, 60],
+    "zoneSpreadC": [0, 15]
+  },
+  "runToRun": {
+    "rateSigma": 0.015,
+    "uniformitySigma": 0.08,
+    "note": "Run마다 증착률(평균 두께)과 위치별 편차 크기가 조금씩 달라지는 교육용 산포."
+  }
+}

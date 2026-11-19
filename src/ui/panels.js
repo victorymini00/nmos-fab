@@ -1,7 +1,7 @@
 export function createUI(root,layout,{onInteract,onClose,onReset,onRunsheet,onSection,onGuide}) {
   root.innerHTML=`
     <main id="world"></main>
-    <header class="topbar"><div class="brand"><span class="brand-icon">◈</span><div><span class="eyebrow">FAB SIMULATOR / NMOS</span><h1>반도체 팹 시뮬레이터</h1></div></div><nav><button id="runsheet" class="secondary">Runsheet <kbd>R</kbd></button><button id="section" class="secondary">단면도 <kbd>C</kbd></button><span class="stage-tag">개발 06 · 3D 비주얼</span></nav></header>
+    <header class="topbar"><div class="brand"><span class="brand-icon">◈</span><div><span class="eyebrow">FAB SIMULATOR / NMOS</span><h1>반도체 팹 시뮬레이터</h1></div></div><nav><button id="runsheet" class="secondary">Runsheet <kbd>R</kbd></button><button id="section" class="secondary">단면도 <kbd>C</kbd></button><span class="stage-tag">실험실 <kbd>L</kbd></span></nav></header>
     <section class="mission"><span class="eyebrow">LOT NMOS-001 / Si(100)</span><h2 id="mission-title"></h2><p id="mission-text"></p><button id="guide" class="secondary">다음 장비로 이동</button><p id="save-state" role="status">자동 저장 준비</p></section>
     <aside class="wafer-preview"><span class="eyebrow">WAFER CROSS SECTION</span><div id="mini-section"></div></aside>
     <div id="labels" aria-hidden="true"></div>

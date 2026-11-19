@@ -12,6 +12,8 @@ import {bindIncident,questStartForm,experimentPanel,bindExperiment,readQuestStar
 import {experimentRow} from './systems/experiment.js';
 import {bindAdvisor} from './ui/advisorPanel.js';
 import {bindIncident002} from './ui/incident002Panel.js';
+import {labView,bindLab,loadLab,saveLab} from './ui/labPanel.js';
+import {createLab} from './systems/processLab.js';
 import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js';
 import {bindReportExport} from './ui/reportExport.js';
 import {signedElectrical} from './systems/report.js';
@@ -20,7 +22,7 @@ import './ui/styles.css';
 
 const root=document.querySelector('#app');
 const persistence=createPersistence(()=>window.localStorage,flow);
-const loaded=persistence.load();let state=loaded.state,world,view=null;
+const loaded=persistence.load();let state=loaded.state,world,view=null,lab=loadLab(createLab);
 const ui=createUI(root,layout,{
   onInteract:interact,onClose:()=>{view=null;world?.setPaused(false);},
   onReset:()=>{world?.reset();ui.message('방진복 착용실 입구로 이동했습니다.');},
@@ -61,12 +63,17 @@ function renderView(){
     ui.content.querySelector('#restart-photo')?.addEventListener('click',()=>act({type:'restart-photo'}));
     ui.content.querySelector('#sign-form')?.addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget);act({type:'sign',name:data.get('signature'),acknowledgeDefects:data.get('acknowledge')==='on'});});
     bindReportExport(ui.content,state,flow,layout);
+  }else if(view.type==='lab'){
+    ui.show('공정 개선 실험실','PROCESS LAB · POLY LPCVD',true);
+    ui.content.innerHTML=labView(lab,state,flow,!currentTask(state,flow));
+    bindLab(ui.content,{getLab:()=>lab,setLab:l=>{lab=l;saveLab(lab);renderView();},getState:()=>state,flow});
   }else if(view.type==='runsheet'){
     ui.show('Lot 공정 지시서','RUNSHEET / NMOS-001',true);
-    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><section class="incident armed"><div class="incident-head"><span>FAB INCIDENT</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}`:runsheetPanel(state,flow,layout);
+    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><section class="incident armed"><div class="incident-head"><span>FAB INCIDENT</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}<p><button id="open-lab" class="primary">공정 개선 실험실 열기 <kbd>L</kbd></button></p>`:runsheetPanel(state,flow,layout);
     bindReportExport(ui.content,state,flow,layout);
     ui.content.querySelector('#quest-start')?.addEventListener('submit',e=>{e.preventDefault();newIncidentLot(readQuestStart(e.currentTarget));});
     bindExperiment(ui.content,renderView);
+    ui.content.querySelector('#open-lab')?.addEventListener('click',()=>open('lab'));
     ui.content.querySelector('#new-lot')?.addEventListener('click',()=>{
       state=createLot();ui.saved(persistence.reset());world?.reset();refresh();renderView();ui.message('새 Lot을 시작합니다. 이전 Lot 기록을 초기화했습니다.');
     });
@@ -99,6 +106,6 @@ try{
   refresh();ui.saved(persistence.save());if(loaded.notice)ui.message(loaded.notice);
   window.addEventListener('keydown',e=>{
     if(e.repeat||e.target.matches('input,select,textarea')||ui.isOpen)return;
-    if(e.code==='KeyE')interact();if(e.code==='KeyR')open('runsheet');if(e.code==='KeyC')open('section');
+    if(e.code==='KeyE')interact();if(e.code==='KeyR')open('runsheet');if(e.code==='KeyC')open('section');if(e.code==='KeyL')open('lab');
   });
 }catch(error){console.error(error);const el=document.createElement('div');el.className='fatal';el.textContent='3D 화면을 시작하지 못했습니다. WebGL 2 지원과 브라우저 하드웨어 가속을 확인해 주세요.';root.append(el);}
