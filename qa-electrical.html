@@ -1,0 +1,12 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>전기적 테스트 검증</title><div id="app"></div><div style="position:fixed;right:30px;top:100px;z-index:20"><button id="qa-good">기준 소자</button><button id="qa-bad">Contact 불량 소자</button></div><script type="module">
+import '/src/ui/styles.css';
+import {createUI} from '/src/ui/panels.js';
+import {electricalPanel} from '/src/ui/electricalPanel.js';
+import {bindReportExport} from '/src/ui/reportExport.js';
+import {applyAction} from '/src/systems/runsheet.js';
+const [fixtures,flow,layout]=await Promise.all(['/qa-fixtures.json','/src/data/process_flow.json','/src/data/map_layout.json'].map(p=>fetch(p).then(r=>r.json())));
+let state=structuredClone(fixtures.nominal);const noop=()=>{};
+const ui=createUI(document.querySelector('#app'),layout,{onInteract:noop,onClose:noop,onReset:noop,onRunsheet:render,onSection:noop,onGuide:noop});
+function render(){ui.show('NMOS 전기적 테스트','QA / 동일 테스트·저장 코드',true);ui.content.innerHTML=electricalPanel(state,flow,layout);bindReportExport(ui.content,state,flow,layout);ui.content.querySelector('#run-electrical')?.addEventListener('click',()=>{state=applyAction(state,flow,{type:'execute',equipmentId:'tester'});render();});ui.content.querySelector('#sign-form')?.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.currentTarget);state=applyAction(state,flow,{type:'sign',equipmentId:'tester',name:d.get('signature'),acknowledgeDefects:d.get('acknowledge')==='on'});render();});}
+document.querySelector('#qa-good').onclick=()=>{state=structuredClone(fixtures.nominal);render();};document.querySelector('#qa-bad').onclick=()=>{state=structuredClone(fixtures.bad);render();};render();
+</script></html>

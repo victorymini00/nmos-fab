@@ -1,0 +1,16 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"Fab map layout v1","type":"object","required":["version","room","spawn","zones","equipment"],"additionalProperties":false,
+  "properties":{
+    "$schema":{"type":"string"},"version":{"const":1},
+    "room":{"type":"object","required":["width","depth","wallHeight"],"additionalProperties":false,"properties":{"width":{"type":"number","exclusiveMinimum":0},"depth":{"type":"number","exclusiveMinimum":0},"wallHeight":{"type":"number","exclusiveMinimum":0}}},
+    "spawn":{"$ref":"#/$defs/position"},
+    "zones":{"type":"array","items":{"type":"object","required":["id","name","position","size","color"],"additionalProperties":false,"properties":{"id":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"position":{"$ref":"#/$defs/position"},"size":{"$ref":"#/$defs/area"},"color":{"$ref":"#/$defs/color"}}}},
+    "equipment":{"type":"array","items":{"type":"object","required":["id","name","kind","zoneId","position","size","color"],"additionalProperties":false,"properties":{"id":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"kind":{"type":"string","minLength":1},"zoneId":{"type":"string","minLength":1},"position":{"$ref":"#/$defs/position"},"size":{"type":"array","items":{"type":"number","exclusiveMinimum":0},"minItems":3,"maxItems":3},"color":{"$ref":"#/$defs/color"}}}}
+  },
+  "$defs":{
+    "position":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},
+    "area":{"type":"array","items":{"type":"number","exclusiveMinimum":0},"minItems":2,"maxItems":2},
+    "color":{"type":"string","pattern":"^#[0-9a-fA-F]{6}$"}
+  }
+}

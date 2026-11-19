@@ -1,0 +1,26 @@
+{
+  "$schema": "./map_layout.schema.json",
+  "version": 1,
+  "room": { "width": 30, "depth": 22, "wallHeight": 2.5 },
+  "spawn": [-10, 7],
+  "zones": [
+    {"id":"gowning","name":"방진복 착용실","position":[-11,7],"size":[7,6],"color":"#cfe4e1"},
+    {"id":"diffusion","name":"DIFFUSION BAY","position":[-10,-6],"size":[8,8],"color":"#f1d2bf"},
+    {"id":"photo","name":"PHOTO BAY","position":[0,-6],"size":[10,8],"color":"#edcf76"},
+    {"id":"etch","name":"ETCH BAY","position":[10,-6],"size":[8,8],"color":"#c7d1f0"},
+    {"id":"implant","name":"IMPLANT BAY","position":[-5,6],"size":[5,7],"color":"#dacdf0"},
+    {"id":"film","name":"THIN FILM BAY","position":[1,6],"size":[5,7],"color":"#c3e5c9"},
+    {"id":"metrology","name":"METROLOGY","position":[7,6],"size":[5,7],"color":"#c3def2"},
+    {"id":"test","name":"TEST","position":[12,6],"size":[4,7],"color":"#e8dcc4"}
+  ],
+  "equipment": [
+    {"id":"furnace","name":"산화·확산로","kind":"furnace","zoneId":"diffusion","position":[-10,-7],"size":[3.4,2.1,2.6],"color":"#f0f5f4"},
+    {"id":"coater","name":"코터·현상기","kind":"coater","zoneId":"photo","position":[-2.7,-7],"size":[2.6,1.8,2.6],"color":"#fff0ba"},
+    {"id":"aligner","name":"노광기","kind":"aligner","zoneId":"photo","position":[2.7,-7],"size":[2.6,2.2,2.6],"color":"#fff0ba"},
+    {"id":"etcher","name":"습식·건식 식각기","kind":"etcher","zoneId":"etch","position":[10,-7],"size":[3.3,1.9,2.6],"color":"#e8eff7"},
+    {"id":"implanter","name":"이온주입기","kind":"implanter","zoneId":"implant","position":[-5,6],"size":[2.7,2.1,2.4],"color":"#e8f1f4"},
+    {"id":"deposition","name":"LPCVD·스퍼터","kind":"deposition","zoneId":"film","position":[1,6],"size":[2.7,2.2,2.4],"color":"#e9f2ed"},
+    {"id":"metrology","name":"두께 측정·현미경","kind":"metrology","zoneId":"metrology","position":[7,6],"size":[2.6,1.5,2.4],"color":"#eaf2f8"},
+    {"id":"tester","name":"전기적 테스트","kind":"tester","zoneId":"test","position":[12,6],"size":[2.3,1.7,2.4],"color":"#eeedf7"}
+  ]
+}

@@ -1,0 +1,1043 @@
+{
+  "$schema": "./process_flow.schema.json",
+  "version": 1,
+  "stages": [
+    {
+      "id": "clean",
+      "number": 0,
+      "title": "웨이퍼 입고 + RCA 세정",
+      "card": [
+        "웨이퍼 표면의 오염은 이후 고온 공정과 막 품질에 영향을 줍니다.",
+        "SC-1은 유기물·입자, SC-2는 금속·이온 오염 제거에 사용됩니다.",
+        "이번 단계는 입고 확인과 RCA 세정 완료를 하나의 교육용 동작으로 처리합니다.",
+        "초기 산화막 2 nm는 모델 가정이며 실제 세정 후 두께는 검증 필요입니다."
+      ],
+      "operations": [
+        {
+          "id": "rca-clean",
+          "equipmentId": "etcher",
+          "modelId": "rca-check",
+          "parameters": [],
+          "measurementRequired": false,
+          "verification": "검증 필요"
+        }
+      ]
+    },
+    {
+      "id": "field-oxide",
+      "number": 1,
+      "title": "Field 산화",
+      "card": [
+        "두꺼운 Field 산화막은 이후 소자가 놓일 영역을 구분하는 데 사용됩니다.",
+        "이번 단계에서는 패터닝 전 웨이퍼 전면에 SiO₂를 성장시킵니다.",
+        "산화막을 통과하는 확산과 계면 반응을 Deal–Grove 모델로 계산합니다.",
+        "공정 실행 뒤 계측 장비에서 두께를 측정하고 확인 서명해야 완료됩니다."
+      ],
+      "operations": [
+        {
+          "id": "field-oxidation",
+          "equipmentId": "furnace",
+          "modelId": "deal-grove",
+          "parameters": [
+            {
+              "key": "temperatureC",
+              "label": "온도",
+              "unit": "°C",
+              "target": 1000,
+              "min": 920,
+              "max": 1100,
+              "tolerance": 0
+            },
+            {
+              "key": "timeMinutes",
+              "label": "시간",
+              "unit": "분",
+              "target": 60,
+              "min": 1,
+              "max": 240,
+              "tolerance": 0
+            },
+            {
+              "key": "ambient",
+              "label": "분위기",
+              "unit": "",
+              "target": "wet",
+              "options": [
+                "dry",
+                "wet"
+              ]
+            }
+          ],
+          "thicknessToleranceFraction": 0.1,
+          "measurementRequired": true,
+          "measurementEquipmentId": "metrology",
+          "verification": "검증 필요"
+        }
+      ]
+    },
+    {
+      "id": "active-photo",
+      "number": 2,
+      "title": "Active 포토",
+      "card": [
+        "HMDS는 산화막 표면과 PR의 접착을 돕습니다. 생략하면 박리 결함이 증가합니다.",
+        "스핀코팅 속도가 높아질수록 PR은 얇아집니다. 소프트베이크는 고정 조건으로 자동 처리합니다.",
+        "양성 PR은 마스크의 투명한 부분을 노광하면 현상액에 더 잘 녹습니다.",
+        "첫 마스크의 좌표 기준을 가정한 정렬 연습입니다. 실제 오버레이 공정과 수치 보정은 검증 필요입니다."
+      ],
+      "operations": [
+        {
+          "id": "active-hmds",
+          "equipmentId": "coater",
+          "modelId": "hmds",
+          "parameters": [
+            {
+              "key": "treatment",
+              "label": "HMDS",
+              "unit": "",
+              "target": "apply",
+              "options": [
+                "apply",
+                "skip"
+              ]
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "active",
+          "material": "oxide"
+        },
+        {
+          "id": "active-spin",
+          "equipmentId": "coater",
+          "modelId": "spin",
+          "parameters": [
+            {
+              "key": "rpm",
+              "label": "회전수",
+              "unit": "rpm",
+              "target": 3000,
+              "min": 1000,
+              "max": 6000,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "active",
+          "material": "oxide"
+        },
+        {
+          "id": "active-exposure",
+          "equipmentId": "aligner",
+          "modelId": "exposure",
+          "parameters": [
+            {
+              "key": "dose",
+              "label": "노광량",
+              "unit": "mJ/cm²",
+              "target": 100,
+              "min": 10,
+              "max": 300,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetXUm",
+              "label": "X 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetYUm",
+              "label": "Y 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "rotationDeg",
+              "label": "회전 오차",
+              "unit": "°",
+              "target": 0,
+              "min": -5,
+              "max": 5,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "active",
+          "material": "oxide"
+        },
+        {
+          "id": "active-develop",
+          "equipmentId": "coater",
+          "modelId": "develop",
+          "parameters": [
+            {
+              "key": "seconds",
+              "label": "현상 시간",
+              "unit": "초",
+              "target": 60,
+              "min": 5,
+              "max": 180,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "measurementType": "pattern",
+          "acceptDefects": true,
+          "photoGroup": "active",
+          "material": "oxide"
+        }
+      ]
+    },
+    {
+      "id": "field-etch",
+      "number": 3,
+      "title": "BOE 산화막 식각",
+      "card": [
+        "현상으로 열린 Active 영역의 Field 산화막을 제거합니다.",
+        "BOE는 산화막을 등방성으로 식각하므로 마스크 아래에도 언더컷이 생깁니다.",
+        "시간이 짧으면 산화막이 남고, 길면 과식각과 패턴 손상이 증가합니다.",
+        "HMDS 생략·PR 잔사·정렬 오차가 이번 식각 결과에 누적됩니다."
+      ],
+      "operations": [
+        {
+          "id": "active-boe",
+          "equipmentId": "etcher",
+          "modelId": "boe",
+          "parameters": [
+            {
+              "key": "minutes",
+              "label": "BOE 시간",
+              "unit": "분",
+              "target": 5.16,
+              "min": 0.01,
+              "max": 20,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "measurementType": "etch",
+          "acceptDefects": true,
+          "photoGroup": "active",
+          "material": "oxide"
+        }
+      ]
+    },
+    {
+      "id": "gate-oxide",
+      "number": 4,
+      "title": "게이트 산화",
+      "card": [
+        "BOE 뒤 남은 PR을 먼저 제거하여 게이트 산화면을 준비합니다.",
+        "Active 영역의 얇은 건식 SiO₂는 게이트와 채널 사이의 절연막입니다.",
+        "앞 식각의 잔류막은 초기 산화막 두께로 이어져 결과에 누적됩니다.",
+        "초기 건식 성장 보정과 실제 장비 재현성은 검증 필요입니다."
+      ],
+      "operations": [
+        {
+          "id": "pre-gate-strip",
+          "equipmentId": "etcher",
+          "modelId": "strip",
+          "parameters": [],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true
+        },
+        {
+          "id": "gate-oxidation",
+          "equipmentId": "furnace",
+          "modelId": "gate-oxide",
+          "parameters": [
+            {
+              "key": "temperatureC",
+              "label": "온도",
+              "unit": "°C",
+              "target": 1000,
+              "min": 920,
+              "max": 1100,
+              "tolerance": 0
+            },
+            {
+              "key": "timeMinutes",
+              "label": "시간",
+              "unit": "분",
+              "target": 20,
+              "min": 1,
+              "max": 120,
+              "tolerance": 0
+            },
+            {
+              "key": "ambient",
+              "label": "분위기",
+              "unit": "",
+              "target": "dry",
+              "options": [
+                "dry",
+                "wet"
+              ]
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "film",
+          "thicknessToleranceFraction": 0.15
+        }
+      ]
+    },
+    {
+      "id": "poly-film",
+      "number": 5,
+      "title": "Poly-Si LPCVD 증착",
+      "card": [
+        "Poly-Si를 전면에 증착한 다음 Gate 포토로 게이트 모양을 남깁니다.",
+        "증착률 × 시간은 평균 두께를 정합니다. 온도가 높으면 반응 속도가 증가합니다.",
+        "동일한 평균 두께도 위치별 산포가 크면 후속 식각에 잔사가 생길 수 있습니다.",
+        "5지점 두께와 (최대−최소)/(2×평균) 비균일도를 계측합니다."
+      ],
+      "operations": [
+        {
+          "id": "poly-deposition",
+          "equipmentId": "deposition",
+          "modelId": "deposit",
+          "parameters": [
+            {
+              "key": "temperatureC",
+              "label": "온도",
+              "unit": "°C",
+              "target": 620,
+              "min": 580,
+              "max": 650,
+              "tolerance": 0
+            },
+            {
+              "key": "minutes",
+              "label": "시간",
+              "unit": "분",
+              "target": 20,
+              "min": 0.1,
+              "max": 120,
+              "tolerance": 0
+            },
+            {
+              "key": "zoneSpreadC",
+              "label": "온도 분포 폭",
+              "unit": "°C",
+              "target": 1,
+              "min": 0,
+              "max": 15,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "deposition",
+          "material": "poly",
+          "targetThicknessNm": 200
+        }
+      ]
+    },
+    {
+      "id": "gate-photo-etch",
+      "number": 6,
+      "title": "Gate 포토 + Poly 식각",
+      "card": [
+        "Active 포토에서 사용한 HMDS·코팅·정렬·노광·현상을 재사용합니다.",
+        "이번 마스크는 게이트로 남길 Poly를 PR로 보호합니다.",
+        "얇은 지점부터 Poly가 제거되며 과식각은 아래 산화막을 공격합니다.",
+        "게이트 정렬·잔사·보호막 손실은 이온주입 마스크 품질에 누적됩니다."
+      ],
+      "operations": [
+        {
+          "id": "gate-hmds",
+          "equipmentId": "coater",
+          "modelId": "hmds",
+          "parameters": [
+            {
+              "key": "treatment",
+              "label": "HMDS",
+              "unit": "",
+              "target": "apply",
+              "options": [
+                "apply",
+                "skip"
+              ]
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "gate",
+          "material": "poly"
+        },
+        {
+          "id": "gate-spin",
+          "equipmentId": "coater",
+          "modelId": "spin",
+          "parameters": [
+            {
+              "key": "rpm",
+              "label": "회전수",
+              "unit": "rpm",
+              "target": 3000,
+              "min": 1000,
+              "max": 6000,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "gate",
+          "material": "poly"
+        },
+        {
+          "id": "gate-exposure",
+          "equipmentId": "aligner",
+          "modelId": "exposure",
+          "parameters": [
+            {
+              "key": "dose",
+              "label": "노광량",
+              "unit": "mJ/cm²",
+              "target": 100,
+              "min": 10,
+              "max": 300,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetXUm",
+              "label": "X 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetYUm",
+              "label": "Y 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "rotationDeg",
+              "label": "회전 오차",
+              "unit": "°",
+              "target": 0,
+              "min": -5,
+              "max": 5,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "gate",
+          "material": "poly"
+        },
+        {
+          "id": "gate-develop",
+          "equipmentId": "coater",
+          "modelId": "develop",
+          "parameters": [
+            {
+              "key": "seconds",
+              "label": "현상 시간",
+              "unit": "초",
+              "target": 60,
+              "min": 5,
+              "max": 180,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "measurementType": "pattern",
+          "acceptDefects": true,
+          "photoGroup": "gate",
+          "material": "poly"
+        },
+        {
+          "id": "gate-poly-etch",
+          "equipmentId": "etcher",
+          "modelId": "pattern-etch",
+          "parameters": [
+            {
+              "key": "minutes",
+              "label": "식각 시간",
+              "unit": "분",
+              "target": 2.25,
+              "min": 0.01,
+              "max": 20,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "etch",
+          "material": "poly",
+          "photoGroup": "gate"
+        },
+        {
+          "id": "post-gate-strip",
+          "equipmentId": "etcher",
+          "modelId": "strip",
+          "parameters": [],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true
+        }
+      ]
+    },
+    {
+      "id": "source-drain",
+      "number": 7,
+      "title": "S/D 이온주입 + 어닐링",
+      "card": [
+        "Poly 게이트와 Field 산화막을 마스크로 S/D 영역에 인을 주입합니다.",
+        "에너지는 평균 침투 깊이와 분포 폭, 도즈는 면적당 이온 수를 정합니다.",
+        "어닐링은 도펀트를 활성화하고 분포를 확산시킵니다.",
+        "가우시안 근사 접합 깊이·활성화율·면저항을 계측합니다. 실제 공정 보정은 검증 필요입니다."
+      ],
+      "operations": [
+        {
+          "id": "sd-implant",
+          "equipmentId": "implanter",
+          "modelId": "implant",
+          "parameters": [
+            {
+              "key": "energyKeV",
+              "label": "에너지",
+              "unit": "keV",
+              "target": 50,
+              "min": 10,
+              "max": 100,
+              "tolerance": 0
+            },
+            {
+              "key": "doseCm2",
+              "label": "도즈",
+              "unit": "cm⁻²",
+              "target": 1000000000000000,
+              "min": 10000000000000,
+              "max": 5000000000000000,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true
+        },
+        {
+          "id": "sd-anneal",
+          "equipmentId": "furnace",
+          "modelId": "anneal",
+          "parameters": [
+            {
+              "key": "temperatureC",
+              "label": "온도",
+              "unit": "°C",
+              "target": 1000,
+              "min": 900,
+              "max": 1100,
+              "tolerance": 0
+            },
+            {
+              "key": "seconds",
+              "label": "시간",
+              "unit": "초",
+              "target": 30,
+              "min": 5,
+              "max": 120,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "device"
+        }
+      ]
+    },
+    {
+      "id": "contact",
+      "number": 8,
+      "title": "층간 절연막 + Contact 포토/식각",
+      "card": [
+        "층간 SiO₂는 금속과 게이트·기판 사이를 절연합니다.",
+        "증착 뒤 Contact 마스크로 연결할 위치만 개구합니다.",
+        "절연막과 S/D 위 얇은 산화막까지 제거해야 접촉 창이 열립니다.",
+        "정렬 불량·잔류 절연막·과식각은 접촉 불량으로 이어집니다."
+      ],
+      "operations": [
+        {
+          "id": "ild-deposition",
+          "equipmentId": "deposition",
+          "modelId": "deposit",
+          "parameters": [
+            {
+              "key": "temperatureC",
+              "label": "온도",
+              "unit": "°C",
+              "target": 400,
+              "min": 350,
+              "max": 450,
+              "tolerance": 0
+            },
+            {
+              "key": "minutes",
+              "label": "시간",
+              "unit": "분",
+              "target": 10,
+              "min": 0.1,
+              "max": 120,
+              "tolerance": 0
+            },
+            {
+              "key": "zoneSpreadC",
+              "label": "온도 분포 폭",
+              "unit": "°C",
+              "target": 1,
+              "min": 0,
+              "max": 15,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "deposition",
+          "material": "ild",
+          "targetThicknessNm": 500
+        },
+        {
+          "id": "contact-hmds",
+          "equipmentId": "coater",
+          "modelId": "hmds",
+          "parameters": [
+            {
+              "key": "treatment",
+              "label": "HMDS",
+              "unit": "",
+              "target": "apply",
+              "options": [
+                "apply",
+                "skip"
+              ]
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "contact",
+          "material": "ild"
+        },
+        {
+          "id": "contact-spin",
+          "equipmentId": "coater",
+          "modelId": "spin",
+          "parameters": [
+            {
+              "key": "rpm",
+              "label": "회전수",
+              "unit": "rpm",
+              "target": 3000,
+              "min": 1000,
+              "max": 6000,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "contact",
+          "material": "ild"
+        },
+        {
+          "id": "contact-exposure",
+          "equipmentId": "aligner",
+          "modelId": "exposure",
+          "parameters": [
+            {
+              "key": "dose",
+              "label": "노광량",
+              "unit": "mJ/cm²",
+              "target": 100,
+              "min": 10,
+              "max": 300,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetXUm",
+              "label": "X 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetYUm",
+              "label": "Y 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "rotationDeg",
+              "label": "회전 오차",
+              "unit": "°",
+              "target": 0,
+              "min": -5,
+              "max": 5,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "contact",
+          "material": "ild"
+        },
+        {
+          "id": "contact-develop",
+          "equipmentId": "coater",
+          "modelId": "develop",
+          "parameters": [
+            {
+              "key": "seconds",
+              "label": "현상 시간",
+              "unit": "초",
+              "target": 60,
+              "min": 5,
+              "max": 180,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "measurementType": "pattern",
+          "acceptDefects": true,
+          "photoGroup": "contact",
+          "material": "ild"
+        },
+        {
+          "id": "contact-etch",
+          "equipmentId": "etcher",
+          "modelId": "pattern-etch",
+          "parameters": [
+            {
+              "key": "minutes",
+              "label": "식각 시간",
+              "unit": "분",
+              "target": 5.9,
+              "min": 0.01,
+              "max": 20,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "etch",
+          "material": "ild",
+          "photoGroup": "contact"
+        },
+        {
+          "id": "post-contact-strip",
+          "equipmentId": "etcher",
+          "modelId": "strip",
+          "parameters": [],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true
+        }
+      ]
+    },
+    {
+      "id": "metal-film",
+      "number": 9,
+      "title": "Al 스퍼터 증착",
+      "card": [
+        "알루미늄을 증착하여 열린 Contact와 배선층을 형성합니다.",
+        "파워가 커지면 이 교육 모델의 증착률이 증가합니다. 시간은 평균 두께를 정합니다.",
+        "기판 회전은 공간 편차를 줄입니다. 시간을 늘려도 상대 비균일도는 해결되지 않습니다.",
+        "평균·최소·최대·5지점 분포를 확인하고, 접촉 창 상태도 함께 검사합니다."
+      ],
+      "operations": [
+        {
+          "id": "al-deposition",
+          "equipmentId": "deposition",
+          "modelId": "deposit",
+          "parameters": [
+            {
+              "key": "powerW",
+              "label": "파워",
+              "unit": "W",
+              "target": 200,
+              "min": 50,
+              "max": 500,
+              "tolerance": 0
+            },
+            {
+              "key": "minutes",
+              "label": "시간",
+              "unit": "분",
+              "target": 5,
+              "min": 0.1,
+              "max": 120,
+              "tolerance": 0
+            },
+            {
+              "key": "rotation",
+              "label": "기판 회전",
+              "unit": "",
+              "target": "on",
+              "options": [
+                "on",
+                "off"
+              ]
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "deposition",
+          "material": "metal",
+          "targetThicknessNm": 500
+        }
+      ]
+    },
+    {
+      "id": "metal-photo-etch",
+      "number": 10,
+      "title": "Metal 포토/식각",
+      "card": [
+        "배선으로 남길 금속을 PR로 보호하고 불필요한 금속을 제거합니다.",
+        "금속의 위치별 두께가 다르면 식각 완료 시점도 다릅니다.",
+        "미식각은 잔류 금속 연결, 과식각과 박리는 배선 손실 위험을 남깁니다.",
+        "검사·서명·PR 제거를 마치면 공정이 완료됩니다. 전기적 테스트는 다음 개발 단계입니다."
+      ],
+      "operations": [
+        {
+          "id": "metal-hmds",
+          "equipmentId": "coater",
+          "modelId": "hmds",
+          "parameters": [
+            {
+              "key": "treatment",
+              "label": "HMDS",
+              "unit": "",
+              "target": "apply",
+              "options": [
+                "apply",
+                "skip"
+              ]
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "metal",
+          "material": "metal"
+        },
+        {
+          "id": "metal-spin",
+          "equipmentId": "coater",
+          "modelId": "spin",
+          "parameters": [
+            {
+              "key": "rpm",
+              "label": "회전수",
+              "unit": "rpm",
+              "target": 3000,
+              "min": 1000,
+              "max": 6000,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "metal",
+          "material": "metal"
+        },
+        {
+          "id": "metal-exposure",
+          "equipmentId": "aligner",
+          "modelId": "exposure",
+          "parameters": [
+            {
+              "key": "dose",
+              "label": "노광량",
+              "unit": "mJ/cm²",
+              "target": 100,
+              "min": 10,
+              "max": 300,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetXUm",
+              "label": "X 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "offsetYUm",
+              "label": "Y 오차",
+              "unit": "µm",
+              "target": 0,
+              "min": -8,
+              "max": 8,
+              "tolerance": 0
+            },
+            {
+              "key": "rotationDeg",
+              "label": "회전 오차",
+              "unit": "°",
+              "target": 0,
+              "min": -5,
+              "max": 5,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true,
+          "photoGroup": "metal",
+          "material": "metal"
+        },
+        {
+          "id": "metal-develop",
+          "equipmentId": "coater",
+          "modelId": "develop",
+          "parameters": [
+            {
+              "key": "seconds",
+              "label": "현상 시간",
+              "unit": "초",
+              "target": 60,
+              "min": 5,
+              "max": 180,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "measurementType": "pattern",
+          "acceptDefects": true,
+          "photoGroup": "metal",
+          "material": "metal"
+        },
+        {
+          "id": "metal-etch",
+          "equipmentId": "etcher",
+          "modelId": "pattern-etch",
+          "parameters": [
+            {
+              "key": "minutes",
+              "label": "식각 시간",
+              "unit": "분",
+              "target": 1.91,
+              "min": 0.01,
+              "max": 20,
+              "tolerance": 0
+            }
+          ],
+          "measurementRequired": true,
+          "verification": "검증 필요",
+          "measurementEquipmentId": "metrology",
+          "acceptDefects": true,
+          "measurementType": "etch",
+          "material": "metal",
+          "photoGroup": "metal"
+        },
+        {
+          "id": "final-pr-strip",
+          "equipmentId": "etcher",
+          "modelId": "strip",
+          "parameters": [],
+          "measurementRequired": false,
+          "verification": "검증 필요",
+          "autoAdvance": true
+        }
+      ]
+    },
+    {
+      "id": "electrical-test",
+      "number": 11,
+      "title": "전기적 테스트",
+      "card": [
+        "게이트 산화막과 기판 도핑으로 Vt를 계산합니다. S/D 도즈는 기판 도핑과 구분합니다.",
+        "장채널 제곱 법칙에 S/D·Contact·배선 직렬 저항을 연결하여 Id–Vg를 계산합니다.",
+        "기준 공정 소자의 목표 곡선과 비교하고 누적 결함·검사·재작업을 평가합니다.",
+        "결과 확인 서명을 마치면 전체 Runsheet를 PDF 또는 페이지별 PNG 묶음으로 저장할 수 있습니다."
+      ],
+      "operations": [
+        {
+          "id": "final-electrical",
+          "equipmentId": "tester",
+          "modelId": "electrical",
+          "parameters": [],
+          "measurementRequired": false,
+          "acceptDefects": true,
+          "verification": "검증 필요",
+          "testConditions": {
+            "temperatureK": 300,
+            "vdsV": 1,
+            "vgMinV": 0,
+            "vgMaxV": 3.3,
+            "samples": 67
+          },
+          "specification": {
+            "vtToleranceV": 0.15,
+            "ionToleranceFraction": 0.2,
+            "vtHardToleranceV": 0.3,
+            "ionHardToleranceFraction": 0.5,
+            "gradeCutoffs": {
+              "S": 90,
+              "A": 75,
+              "B": 50
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
