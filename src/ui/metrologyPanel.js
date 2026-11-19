@@ -1,5 +1,6 @@
 import {METROLOGY as M} from '../constants.js';
 import {SITE_NAMES,describeMeasurement,metrologyReview} from '../systems/metrology.js';
+import {incidentSection} from './incidentPanel.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n=v=>Number(v).toFixed(1);
 // 웨이퍼 위 측정 지점 좌표(SVG). 이름 순서는 SITE_NAMES(중앙·북·동·남·서).
@@ -19,11 +20,14 @@ export function metrologyPanel(state,op,record,signForm){
   const latest=record?.measurement,history=record?.measurements??[];
   const tolerance=op.modelId==='deposit'?`평균 ±10% · 비균일도 ≤${(record?.result?.uniformityLimit*100||0).toFixed(0)}%`:`평균 ±${op.thicknessToleranceFraction*100}%`;
   let html=`<section class="process-card"><h3>${op.modelId==='deposit'?'막 두께·균일도 측정':'산화막 두께 측정'}</h3><p>측정값에는 장비의 반복 오차와 편향이 섞여 있어요. 실제 두께는 Lot이 끝난 뒤 사후 분석에서 공개됩니다.</p><p class="muted">합격 기준: ${tolerance}${record?.result?.targetNm?` · 목표 ${n(record.result.targetNm)} nm`:''}. 1점 측정은 빠르지만 균일도를 판단할 수 없어요. 지점당 ${M.minutesPerSite}분.</p></section>`;
+  const quest=op.id==='field-oxidation'?incidentSection(state):'',inc=state.incident;
+  html=quest+html;
   if(!record)return html+'<p class="result">지정된 장비에서 공정을 먼저 실행하세요.</p>'+toolStatus(state);
   html+=`<div class="metrology-grid"><div>${waferMap(latest,true)}</div><div><form id="measure-form"><fieldset class="site-picker"><legend>측정 지점 선택</legend>${SITE_NAMES.map(s=>`<label class="check"><input type="checkbox" name="site" value="${s}" checked>${s}</label>`).join('')}</fieldset><button id="measure" class="primary">선택 지점 측정</button></form>
     ${latest?`<div class="result ${latest.pass?'success':'failure'}"><strong>${latest.pass?'측정 기준 합격':'측정 기준 불합격'}</strong><p>${esc(describeMeasurement(latest)).replaceAll('\n','<br>')}</p></div>`:'<p class="muted">아직 측정하지 않았어요.</p>'}</div></div>`;
   if(history.length>1)html+=`<details class="model-note" open><summary>측정 이력 ${history.length}회</summary><table class="mini-table"><thead><tr><th>#</th><th>지점별 값 [nm]</th><th>평균</th><th>비균일도</th><th>판정</th></tr></thead><tbody>${history.map((m,i)=>`<tr><td>${i+1}</td><td>${m.observed.map(o=>`${o.name} ${n(o.valueNm)}`).join(' · ')}</td><td>${n(m.meanNm)}</td><td>${m.nonuniformity===null?'—':(m.nonuniformity*100).toFixed(2)+'%'}</td><td>${m.pass?'합격':'불합격'}</td></tr>`).join('')}</tbody></table></details>`;
-  if(latest)html+=latest.pass||op.acceptDefects?signForm(!latest.pass):'<p>측정 기준을 만족하지 못했어요. 재측정·장비 확인으로 원인을 가리거나, 공정 장비에서 재작업하세요.</p>';
+  const blocked=quest&&['alarm','hold'].includes(inc.phase),override=quest&&inc.phase==='resolved'&&inc.disposition==='use-as-is'&&!latest?.pass,scrapped=quest&&inc.phase==='resolved'&&inc.disposition==='scrap';
+  if(latest&&!blocked&&!scrapped)html+=latest.pass||op.acceptDefects||override?signForm(!latest.pass):'<p>측정 기준을 만족하지 못했어요. 재측정·장비 확인으로 원인을 가리거나, 공정 장비에서 재작업하세요.</p>';
   return html+toolStatus(state);
 }
 export function bindMetrology(content,act){

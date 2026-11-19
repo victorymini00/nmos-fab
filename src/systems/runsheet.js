@@ -5,7 +5,8 @@ import {depositFilm,implantPhosphorus,annealImplant,etchPattern} from './fabrica
 import {buildReferenceLot,testElectrical} from './electrical.js';
 import {createMetrologyState,isThicknessOperation,measureSites,checkReference,calibrate} from './metrology.js';
 import {DEPOSITION as D} from '../constants.js';
-export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState()};}
+import {startIncident,applyOxidationFault,afterMeasurement,holdLot,onReferenceCheck,inspectLog,diagnose,changeDisposition,signGate} from './incidents.js';
+export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState(),incident:null};}
 export function operations(flow){return flow.stages.flatMap(stage=>stage.operations.map(operation=>({stage,operation})));}
 export function currentTask(state,flow){return operations(flow)[state.cursor]??null;}
 export function latestRecord(state,flow){const task=currentTask(state,flow);return task?[...state.records].reverse().find(r=>r.operationId===task.operation.id&&!r.superseded)??null:null;}
@@ -20,9 +21,19 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
   if(!task)throw new Error('전기적 테스트와 최종 확인 서명을 완료했습니다.');
   const {stage,operation:op}=task;
   const record=latestRecord(state,flow);
+  const log=(title,operationId,equipmentId,result,input={})=>state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:title,operationId,equipmentId,input,result,executedAt:now,measurement:null,signature:null,autoCompleted:true,superseded:false});
+  if(action.type==='start-incident'){startIncident(state,action,now);log('돌발 상황 퀘스트 시작','incident-start','hud',{kind:'incident-start',title:state.incident.title});return state;}
+  if(action.type==='incident-hold'){holdLot(state);log('Lot HOLD','incident-hold','metrology',{kind:'incident-hold'});return state;}
+  if(action.type==='inspect-log'){
+    if(action.equipmentId!=='furnace')throw new Error('산화로에서 공정 로그를 조회하세요.');
+    const field=[...state.records].reverse().find(r=>r.operationId==='field-oxidation'&&!r.superseded);
+    log('산화로 공정 로그 조회','incident-log','furnace',inspectLog(state,field));return state;}
+  if(action.type==='incident-diagnose'){diagnose(state,action,now);log('원인 판정','incident-diagnosis','metrology',{kind:'incident-diagnosis',cause:action.cause,disposition:action.disposition,...state.incident.evaluation});return state;}
+  if(action.type==='incident-disposition'){changeDisposition(state,action.disposition);log('조치 변경','incident-disposition','metrology',{kind:'incident-disposition',disposition:action.disposition});return state;}
   if(action.type==='check-reference'||action.type==='calibrate'){
     if(action.equipmentId!=='metrology')throw new Error('두께 측정 장비에서만 실행할 수 있습니다.');
     const result=action.type==='calibrate'?calibrate(state):checkReference(state);
+    if(action.type==='check-reference')onReferenceCheck(state,result);
     state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:action.type==='calibrate'?'계측 장비 교정':'기준 시료 측정',operationId:action.type==='calibrate'?'metrology-calibration':'metrology-reference',equipmentId:'metrology',input:{},result,executedAt:now,measurement:null,signature:null,autoCompleted:true,superseded:false});
     return state;
   }
@@ -43,7 +54,7 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     if(op.modelId==='deal-grove'){
       if(!state.cleaned)throw new Error('RCA 세정과 확인 서명을 먼저 완료하세요.');
       input={temperatureC:action.input?.temperatureC,timeMinutes:action.input?.timeMinutes,ambient:action.input?.ambient};
-      result=growOxide({...input,initialOxideNm:state.oxideNm});state.oxideNm=result.thicknessNm;state.activeOxideNm=state.fieldOxideNm=state.oxideNm;
+      const initialOxideNm=state.oxideNm;result=applyOxidationFault(state,op,input,minutes=>growOxide({...input,timeMinutes:minutes,initialOxideNm}));state.oxideNm=result.thicknessNm;state.activeOxideNm=state.fieldOxideNm=state.oxideNm;
     }else if(op.modelId==='rca-check'){state.cleaned=true;}
     else if(op.modelId==='strip'){
       state.prNm=0;state.photo=null;state.etch=null;result={kind:'strip',prNm:0,pass:true};
@@ -127,6 +138,7 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
       else if(op.modelId==='gate-oxide'){const t=res.targetNm;extra={targetNm:t,deviation:(obs.meanNm-t)/t};pass=Math.abs(extra.deviation)<=op.thicknessToleranceFraction&&record.input.ambient==='dry';}
       else{const t=res.targetNm;extra={targetNm:t,deviation:(obs.meanNm-t)/t,uniformityLimit:res.uniformityLimit,material:res.material};pass=Math.abs(extra.deviation)<=D.thicknessTolerance&&(obs.nonuniformity??0)<=res.uniformityLimit&&(res.material!=='metal'||res.contactReady===true);}
       const measurement={equipmentId:action.equipmentId,measuredAt:now,metrology:true,thicknessNm:Number(obs.meanNm.toFixed(C.measurementDecimals)),...obs,...extra,pass};
+      afterMeasurement(state,op,measurement);
       record.measurements=[...(record.measurements??[]),measurement];record.measurement=measurement;
       return state;
     }
@@ -137,8 +149,9 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     if(!record)throw new Error('공정을 먼저 실행하세요.');
     const station=op.measurementRequired?op.measurementEquipmentId:op.equipmentId;
     if(action.equipmentId!==station)throw new Error('현재 확인 장비에서 서명하세요.');
-    if(op.measurementRequired&&(!record.measurement||(!record.measurement.pass&&!op.acceptDefects)))throw new Error('측정값과 분위기가 목표를 만족해야 확인 서명할 수 있습니다. 산화로에서 재작업하거나 새 Lot을 시작하세요.');
-    if(record.measurement&&!record.measurement.pass&&op.acceptDefects&&action.acknowledgeDefects!==true)throw new Error('검사에서 확인된 결함을 인지했다는 체크가 필요합니다.');
+    const gate=signGate(state,op,record,action);
+    if(op.measurementRequired&&gate!=='override'&&(!record.measurement||(!record.measurement.pass&&!op.acceptDefects)))throw new Error('측정값과 분위기가 목표를 만족해야 확인 서명할 수 있습니다. 산화로에서 재작업하거나 새 Lot을 시작하세요.');
+    if(gate!=='override'&&record.measurement&&!record.measurement.pass&&op.acceptDefects&&action.acknowledgeDefects!==true)throw new Error('검사에서 확인된 결함을 인지했다는 체크가 필요합니다.');
     if(op.modelId==='electrical'&&record.result.grade==='F'&&action.acknowledgeDefects!==true)throw new Error('F 등급 결과를 확인했다는 체크가 필요합니다.');
     const name=typeof action.name==='string'?action.name.trim():'';
     if(!name||name.length>32)throw new Error('확인 서명은 1~32자로 입력하세요.');

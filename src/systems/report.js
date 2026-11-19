@@ -5,6 +5,11 @@ const testLabels={temperatureK:['측정 온도','K'],vdsV:['Vds','V'],vgMinV:['V
 export const signedElectrical=state=>state.records.findLast(r=>r.result.kind==='electrical'&&r.signature);
 export function describeResult(r){
   if(r.kind==='metrology-reference')return `기준 시료 ${one(r.certifiedNm)} nm\n측정 ${r.readings.map(one).join(' / ')} nm\n편차 ${r.offsetNm>=0?'+':''}${one(r.offsetNm)} nm`;
+  if(r.kind==='incident-start')return `돌발 상황 퀘스트 시작\n${r.title}`;
+  if(r.kind==='incident-hold')return 'OOS 경고 · Lot HOLD';
+  if(r.kind==='incident-log')return `레시피 ${r.recipeMinutes}분 / 실제 ${Number(r.actualMinutes).toFixed(0)}분\n${r.note}`;
+  if(r.kind==='incident-diagnosis')return `판정 ${r.cause} / 조치 ${r.disposition}\n점수 ${r.score} (원인 ${r.causeOk?'정답':'오답'})`;
+  if(r.kind==='incident-disposition')return `조치 변경: ${r.disposition}`;
   if(r.kind==='metrology-calibration')return '계측 장비 교정 · 편향 초기화';
   if(r.metrology)return describeMeasurement(r);
   if(r.kind==='electrical')return `Vt ${r.vtV.toFixed(3)} V\nIon ${r.ionA===null?'산출불가':(r.ionA*1000).toFixed(3)+' mA'}\n${r.grade} / ${r.score}점`;

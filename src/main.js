@@ -8,6 +8,7 @@ import {createPersistence} from './systems/storage.js';
 import {bindAlignment} from './ui/alignment.js';
 import {bindDeposition} from './ui/fabricationPanels.js';
 import {bindMetrology,bindToolActions} from './ui/metrologyPanel.js';
+import {bindIncident} from './ui/incidentPanel.js';
 import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js';
 import {bindReportExport} from './ui/reportExport.js';
 import {signedElectrical} from './systems/report.js';
@@ -27,7 +28,8 @@ function refresh(){
   const task=currentTask(state,flow),r=latestRecord(state,flow),next=nextEquipment(state,flow);
   const name=layout.equipment.find(e=>e.id===next)?.name;
   const text=!task?`${state.electrical.grade} 등급 · Runsheet에서 전체 보고서를 저장할 수 있습니다.`:task.operation.modelId==='electrical'?(r?'전기적 결과를 확인하고 최종 서명하세요.':'전기적 테스트 장비에서 Vt와 Id–Vg를 측정하세요.'):r?(task.operation.measurementRequired?(r.measurement?(r.measurement.pass?'검사 합격 · 계측 장비에서 확인 서명하세요.':task.operation.acceptDefects?'결함 확인 · 인지 서명으로 계속하거나 재작업하세요.':'조건 이탈 · 재작업 또는 새 Lot이 필요합니다.'):`${name}에서 측정·검사하세요.`):'공정 완료 · 확인 서명하세요.'):`${name}에서 ${task.operation.modelId==='exposure'?'마스크 정렬과 노광':'현재 작업'}을 시작하세요.`;
-  ui.mission(task?`${task.stage.number}. ${task.stage.title}`:'NMOS 제작 · 테스트 완료',text,next);
+  const inc=state.incident,questText=inc?.phase==='alarm'?'⚠ OOS 경고! 계측 장비에서 Lot을 HOLD하고 원인을 조사하세요.':inc?.phase==='hold'?`HOLD 중 · 증거를 모아 원인을 판정하세요 (조사 ${inc.minutes}분)`:null;
+  ui.mission(task?`${task.stage.number}. ${task.stage.title}`:'NMOS 제작 · 테스트 완료',questText??text,inc?.phase==='alarm'||inc?.phase==='hold'?'metrology':next);
   ui.mini(crossSection(state,flow,true));world?.setGuidance(next);
   world?.setEquipmentStatus(equipmentStatuses(state,flow,layout.equipment.map(e=>e.id)));
 }
@@ -46,6 +48,7 @@ function renderView(){
     if(ui.content.querySelector('#measure-form'))bindMetrology(ui.content,act);
     else ui.content.querySelector('#measure')?.addEventListener('click',()=>act({type:'measure'}));
     bindToolActions(ui.content,act);
+    bindIncident(ui.content,{global,act,newIncidentLot});
     bindAlignment(ui.content);
     const operation=currentTask(state,flow)?.operation;
     if(operation?.modelId==='deposit')bindDeposition(ui.content,state,operation);
@@ -55,8 +58,9 @@ function renderView(){
     bindReportExport(ui.content,state,flow,layout);
   }else if(view.type==='runsheet'){
     ui.show('Lot 공정 지시서','RUNSHEET / NMOS-001',true);
-    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details>`:runsheetPanel(state,flow,layout);
+    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><button id="new-incident-lot" class="primary">돌발 상황 퀘스트로 새 Lot 시작</button>`:runsheetPanel(state,flow,layout);
     bindReportExport(ui.content,state,flow,layout);
+    ui.content.querySelector('#new-incident-lot')?.addEventListener('click',newIncidentLot);
     ui.content.querySelector('#new-lot')?.addEventListener('click',()=>{
       state=createLot();ui.saved(persistence.reset());world?.reset();refresh();renderView();ui.message('새 Lot을 시작합니다. 이전 Lot 기록을 초기화했습니다.');
     });
@@ -71,6 +75,15 @@ function perform(action){
     const at=new Date().toISOString();state=applyAction(state,flow,action,at);
     ui.saved(persistence.record(action,at));if(action.type==='execute')world?.pulse(action.equipmentId);refresh();renderView();
   }catch(error){const el=ui.content.querySelector('#action-error');if(el)el.textContent=error.message;else ui.message(error.message);}
+}
+// 장비 근처가 아니어도 되는 동작(퀘스트 시작·HOLD·판정)
+function global(action){
+  try{const at=new Date().toISOString();state=applyAction(state,flow,action,at);ui.saved(persistence.record(action,at));refresh();renderView();}
+  catch(error){const el=ui.content.querySelector('#action-error');if(el)el.textContent=error.message;else ui.message(error.message);}
+}
+function newIncidentLot(){
+  state=createLot();ui.saved(persistence.reset());world?.reset();global({type:'start-incident'});
+  ui.message('돌발 상황 퀘스트를 시작했어요. 평소처럼 공정을 진행하세요.');
 }
 function interact(){if(ui.isOpen)return;const e=world?.getNearby();if(e)open('equipment',e);}
 try{

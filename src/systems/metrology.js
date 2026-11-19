@@ -13,7 +13,8 @@ function stream(state){const m=state.metrology;m.events++;return mulberry32(hash
 export const sigmaFor=nm=>Math.max(M.repeatabilityFloorNm,Math.abs(nm)*M.repeatabilityFraction);
 export function trueSites(result){
   if(result.kind==='deposition')return result.sites.map(s=>({name:s.name,trueNm:s.thicknessNm}));
-  return SITE_NAMES.map((name,i)=>({name,trueNm:result.thicknessNm*M.oxideSiteFactors[i]}));
+  const factors=result.siteFactors??M.oxideSiteFactors;
+  return SITE_NAMES.map((name,i)=>({name,trueNm:result.thicknessNm*factors[i]}));
 }
 export function normalizeSites(sites){
   if(sites===undefined)return [...SITE_NAMES];

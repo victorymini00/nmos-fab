@@ -134,3 +134,12 @@ export const METROLOGY = Object.freeze({
   // 시간 비용 [분]
   minutesPerSite: 2, referenceMinutes: 6, calibrationMinutes: 15
 });
+
+// 돌발 상황 퀘스트 INCIDENT 001 (Field 산화막 OOS). 교육용 가상 시나리오이며 실제 사고 기록이 아닙니다.
+export const INCIDENT = Object.freeze({
+  // A: 계측기 편향(목표 두께 대비 비율), B: 산화로 단계 타이머 고장(실제 가동 시간 배수), C: 남쪽 국부 과성장 비율
+  biasFraction: .13, overrunFactor: 1.2, localSite: '남', localFactor: 1.16,
+  logMinutes: 5,
+  // 평가 배점
+  causePoints: 60, dispositionPoints: 20, evidencePoints: 20, freeInvestigationMinutes: 20, minutePenalty: .5
+});
