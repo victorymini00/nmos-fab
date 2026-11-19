@@ -11,7 +11,7 @@ import {playThrough} from './flowHelpers.js';
 const op=flow.stages.at(-1).operations[0],conditions=op.testConditions,spec=op.specification;
 test('MOS threshold uses oxide capacitance and p-substrate doping with consistent cm units',()=>{
   const a=thresholdVoltage(14.195152489785512,1e16,300),thick=thresholdVoltage(28.390304979571024,1e16,300),doped=thresholdVoltage(14.195152489785512,2e16,300);
-  assert.ok(a.vtV>.9&&a.vtV<.95);assert.ok(thick.vtV>a.vtV);assert.ok(doped.vtV>a.vtV);assert.ok(Math.abs(a.coxFPerCm2/thick.coxFPerCm2-2)<1e-12);
+  assert.ok(Math.abs(a.vtV)<.05);assert.ok(Math.abs(a.phiMsV+.917)<.005);assert.ok(Math.abs(a.vfbV+2*a.phiF+a.depletionV-a.vtV)<1e-12);assert.ok(thick.vtV>a.vtV);assert.ok(doped.vtV>a.vtV);assert.ok(Math.abs(a.coxFPerCm2/thick.coxFPerCm2-2)<1e-12);
   assert.throws(()=>thresholdVoltage(0,1e16,300));assert.equal(squareLaw(.5,1,1,1e-4),0);
   assert.ok(Math.abs(squareLaw(2,.2,1,1e-4)-1.8e-5)<1e-12);assert.equal(squareLaw(2,2,1,1e-4),.00005);
 });
@@ -19,7 +19,7 @@ test('nominal full process reaches tester, generates monotone curve, S grade and
   let state=playThrough({untilStage:11}).state;assert.equal(currentTask(state,flow).operation.id,'final-electrical');
   assert.throws(()=>applyAction(state,flow,{type:'execute',equipmentId:'metrology'}));
   state=applyAction(state,flow,{type:'execute',equipmentId:'tester'});const r=state.electrical;
-  assert.equal(r.grade,'S');assert.equal(r.score,100);assert.equal(r.curve.length,67);assert.equal(r.curve[0].idA,0);assert.ok(r.ionA>.0002&&r.ionA<.0005);
+  assert.equal(r.grade,'S');assert.equal(r.score,100);assert.equal(r.curve.length,67);assert.ok(r.curve[0].idA>0&&r.curve[0].idA<1e-6);assert.ok(r.ionA>.0002&&r.ionA<.0005);
   assert.ok(Math.abs(r.ionA-r.reference.ionA)<1e-12);for(let i=1;i<r.curve.length;i++)assert.ok(r.curve[i].idA>=r.curve[i-1].idA);
   assert.throws(()=>reportData(state,flow,map));state=applyAction(state,flow,{type:'sign',equipmentId:'tester',name:'QA'});assert.equal(currentTask(state,flow),null);
   const report=reportData(state,flow,map);assert.equal(report.rows.length,state.records.length);assert.ok(report.rows.at(-1).cells[4].includes('S / 100점'));

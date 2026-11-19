@@ -89,13 +89,17 @@ export const PATTERN_ETCH=Object.freeze({
 // https://iic-jku.github.io/design-complex-ic/slides/mosfet.html
 // https://dunham.ece.uw.edu/ee531/Long_Channel_MOSFET.pdf
 // Units: cm, F/cm, cm^-3, cm²/Vs. q and k are SI exact definitions; eps0 converted to F/cm.
-// 검증 필요: effective Vfb=0V (not a calibrated n+ poly work function), fixed channel mobility,
+// Flat-band: Vfb = φms − Qf/Cox. Degenerate n+ poly gate (Fermi level ≈ Ec) on p-substrate:
+// φms = −(Eg/2 + φF). Eg(Si, 300 K) = 1.12 eV. Standard MOS-capacitor result (Sze, Physics of
+// Semiconductor Devices; Pierret, Semiconductor Device Fundamentals). The S/D P implant also dopes
+// the patterned poly gate (self-aligned), so the gate is treated as n+ poly.
+// 검증 필요: fixed oxide charge Qf=0 (real thermal oxide ~1e10~1e11 cm⁻² lowers Vt further), fixed channel mobility,
 // access/contact geometry, contact resistance, defect cutoffs and grading weights.
 // S/D doping affects series resistance, NOT the p-substrate doping in the Vt equation.
 export const ELECTRICAL=Object.freeze({
   q:1.602176634e-19,k:1.380649e-23,eps0FPerCm:8.8541878128e-14,
   siliconRelativePermittivity:11.7,oxideRelativePermittivity:3.9,
-  intrinsicCm3:1e10,flatBandV:0,channelMobility:400,nmPerCm:1e7,
+  intrinsicCm3:1e10,siliconBandgapV:1.12,fixedOxideChargeCm2:0,lowVtWarningV:.2,channelMobility:400,nmPerCm:1e7,
   nominalWidthUm:20,nominalLengthUm:10,accessLengthUm:5,
   contactOhmPerTerminal:100,alResistivityOhmCm:2.65e-6,wireLengthUm:100,wireWidthUm:10,
   minOxideNm:2,minPolyNm:100,minMetalNm:100,maxResidualNm:5,maxDefectFraction:.05,

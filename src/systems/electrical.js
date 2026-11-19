@@ -6,7 +6,9 @@ export function thresholdVoltage(toxNm,substrateCm3,temperatureK){
   const thermalV=C.k*temperatureK/C.q,phiF=thermalV*Math.log(substrateCm3/C.intrinsicCm3);
   const coxFPerCm2=C.eps0FPerCm*C.oxideRelativePermittivity/(toxNm/C.nmPerCm);
   const depletionCPerCm2=Math.sqrt(4*C.q*C.eps0FPerCm*C.siliconRelativePermittivity*substrateCm3*phiF);
-  return {vtV:C.flatBandV+2*phiF+depletionCPerCm2/coxFPerCm2,coxFPerCm2,phiF,substrateCm3};
+  // n+ poly gate: φms = −(Eg/2 + φF). Vfb = φms − q·Qf/Cox.
+  const phiMsV=-(C.siliconBandgapV/2+phiF),vfbV=phiMsV-C.q*C.fixedOxideChargeCm2/coxFPerCm2,depletionV=depletionCPerCm2/coxFPerCm2;
+  return {vtV:vfbV+2*phiF+depletionV,vfbV,phiMsV,depletionV,coxFPerCm2,phiF,substrateCm3};
 }
 export function squareLaw(vg,vd,vt,beta){
   const overdrive=vg-vt;if(overdrive<=0||vd<=0)return 0;
@@ -105,5 +107,5 @@ export function testElectrical(state,referenceState,conditions,spec){
   const actual=simulateDevice(deviceParameters(state),conditions),reference=simulateDevice(deviceParameters(referenceState),conditions);
   return {kind:'electrical',...actual,reference,conditions,specification:spec,...gradeDevice(actual,reference,state,spec),
     feedback:processFeedback(actual,reference,conditions),pass:actual.valid,
-    limitations:['Vfb=0 V와 고정 채널 이동도는 교육용 가정 · 검증 필요','서브스레숄드·게이트 누설·채널 길이 변조·단채널 효과는 생략','연결 불량이면 유효 단자 Id–Vg를 산출하지 않으며 Vt는 재료 모델 값','공정별 영향은 한 그룹씩 기준 파라미터로 복원한 비교로, 합산 가능한 인과 기여도가 아님']};
+    limitations:['Vfb는 n+ Poly 게이트 일함수 차이(φms)로 계산 · 고정 산화막 전하 0과 고정 채널 이동도는 교육용 가정(검증 필요)','Vt 조정 주입(채널 붕소 주입)은 미구현이라 Vt가 0 V 근처로 계산됨','서브스레숄드·게이트 누설·채널 길이 변조·단채널 효과는 생략','연결 불량이면 유효 단자 Id–Vg를 산출하지 않으며 Vt는 재료 모델 값','공정별 영향은 한 그룹씩 기준 파라미터로 복원한 비교로, 합산 가능한 인과 기여도가 아님']};
 }
