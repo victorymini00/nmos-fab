@@ -1,8 +1,12 @@
+import {describeMeasurement,isThicknessOperation} from './metrology.js';
 const one=v=>Number(v).toFixed(1),pct=v=>(100*v).toFixed(2);
 const choices={dry:'건식',wet:'습식',apply:'처리',skip:'생략',on:'켜짐',off:'꺼짐'};
 const testLabels={temperatureK:['측정 온도','K'],vdsV:['Vds','V'],vgMinV:['Vg 시작','V'],vgMaxV:['Vg 종료','V'],samples:['스윕 지점','점']};
 export const signedElectrical=state=>state.records.findLast(r=>r.result.kind==='electrical'&&r.signature);
 export function describeResult(r){
+  if(r.kind==='metrology-reference')return `기준 시료 ${one(r.certifiedNm)} nm\n측정 ${r.readings.map(one).join(' / ')} nm\n편차 ${r.offsetNm>=0?'+':''}${one(r.offsetNm)} nm`;
+  if(r.kind==='metrology-calibration')return '계측 장비 교정 · 편향 초기화';
+  if(r.metrology)return describeMeasurement(r);
   if(r.kind==='electrical')return `Vt ${r.vtV.toFixed(3)} V\nIon ${r.ionA===null?'산출불가':(r.ionA*1000).toFixed(3)+' mA'}\n${r.grade} / ${r.score}점`;
   if(r.kind==='deposition')return `평균 ${one(r.meanNm)} nm / ${one(r.rateNmPerMinute)} nm/분\n최소 ${one(r.minNm)} / 최대 ${one(r.maxNm)} nm\n비균일도 ${pct(r.nonuniformity)}%\n${r.sites.map(s=>s.name+' '+one(s.thicknessNm)).join(' / ')} nm${r.contactReady===false?'\nContact 불량 누적':''}`;
   if(r.kind==='pattern-etch')return `${r.status} / 잔류 ${one(r.maxResidualNm)} nm\n보호부 최소 ${one(r.protectedMinNm)} nm\n하부 손실 ${one(r.maxUnderlyingLossNm)} nm\n정렬 ${one(r.overlayUm)} µm / 박리 ${pct(r.defectFraction)}%\n누적 ${one(r.totalMinutes)}분`;
@@ -28,7 +32,7 @@ export function reportRows(state,flow,layout){
     const signature=record.signature?`${record.signature.name}${record.signature.acknowledgedDefects?' / 결함 인지':''}\n서명 ${record.signature.signedAt}`:record.autoCompleted?'자동 기록 완료':'확인 대기';
     return {recordId:record.id,cells:[`${record.stageNumber}. ${record.stageTitle}\n${record.operationId}${record.rework?'\n재작업':''}${record.superseded?'\n이전 이력':''}`,
       layout.equipment.find(e=>e.id===record.equipmentId)?.name??record.equipmentId,target+(op?.targetThicknessNm?'\n평균 '+op.targetThicknessNm+' nm':''),
-      input,describeResult(record.result),record.measurement?`${record.measurement.pass?'합격':'결함 / 조건 이탈'}\n${describeResult(record.measurement)}\n측정 ${record.measurement.measuredAt}`:'해당 없음',
+      input,(isThicknessOperation(op)?'실제 값(사후 공개)\n':'')+describeResult(record.result),record.measurement?`${record.measurement.pass?'합격':'결함 / 조건 이탈'}\n${describeResult(record.measurement)}\n측정 ${record.measurement.measuredAt}`:'해당 없음',
       signature+`\n실행 ${record.executedAt}`]};
   });
 }

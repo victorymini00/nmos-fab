@@ -7,6 +7,7 @@ import {applyAction,createLot,currentTask,latestRecord,nextEquipment} from './sy
 import {createPersistence} from './systems/storage.js';
 import {bindAlignment} from './ui/alignment.js';
 import {bindDeposition} from './ui/fabricationPanels.js';
+import {bindMetrology,bindToolActions} from './ui/metrologyPanel.js';
 import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js';
 import {bindReportExport} from './ui/reportExport.js';
 import {signedElectrical} from './systems/report.js';
@@ -42,7 +43,9 @@ function renderView(){
     const act=action=>perform({...action,equipmentId:view.equipment.id});
     ui.content.querySelector('#run-electrical')?.addEventListener('click',()=>act({type:'execute'}));
     ui.content.querySelector('#clean')?.addEventListener('click',()=>act({type:'execute'}));
-    ui.content.querySelector('#measure')?.addEventListener('click',()=>act({type:'measure'}));
+    if(ui.content.querySelector('#measure-form'))bindMetrology(ui.content,act);
+    else ui.content.querySelector('#measure')?.addEventListener('click',()=>act({type:'measure'}));
+    bindToolActions(ui.content,act);
     bindAlignment(ui.content);
     const operation=currentTask(state,flow)?.operation;
     if(operation?.modelId==='deposit')bindDeposition(ui.content,state,operation);

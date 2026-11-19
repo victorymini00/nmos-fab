@@ -1,0 +1,21 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>정밀 계측 검증</title><div id="app"></div><div style="position:fixed;right:30px;top:100px;z-index:20;display:flex;gap:6px"><button id="qa-oxide">산화막</button><button id="qa-poly">불균일 Poly</button></div><script type="module">
+import '/src/ui/styles.css';
+import flow from '/src/data/process_flow.json';
+import layout from '/src/data/map_layout.json';
+import {createUI} from '/src/ui/panels.js';
+import {equipmentPanel} from '/src/ui/processPanels.js';
+import {bindMetrology,bindToolActions} from '/src/ui/metrologyPanel.js';
+import {applyAction,createLot,currentTask,latestRecord,recommendedEtchMinutes,recommendedPatternEtchMinutes} from '/src/systems/runsheet.js';
+// 검증용: 지정 스테이지까지 기준 조건으로 자동 진행한 뒤 계측 화면을 엽니다.
+const at=()=>new Date().toISOString();
+function input(s,op){const i=Object.fromEntries(op.parameters.map(p=>[p.key,p.target]));if(op.modelId==='boe')i.minutes=recommendedEtchMinutes(s);if(op.modelId==='pattern-etch')i.minutes=recommendedPatternEtchMinutes(s,op);return i;}
+function until(stage){let s=createLot();while(currentTask(s,flow).stage.number<stage){const op=currentTask(s,flow).operation,r=latestRecord(s,flow);s=applyAction(s,flow,!r?{type:'execute',equipmentId:op.equipmentId,input:input(s,op)}:op.measurementRequired&&!r.measurement?{type:'measure',equipmentId:op.measurementEquipmentId}:{type:'sign',equipmentId:op.measurementRequired?op.measurementEquipmentId:op.equipmentId,name:'QA',acknowledgeDefects:true},at());}return s;}
+let state;const noop=()=>{};const ui=createUI(document.querySelector('#app'),layout,{onInteract:noop,onClose:noop,onReset:noop,onRunsheet:noop,onSection:noop,onGuide:noop});
+const metrology=layout.equipment.find(e=>e.id==='metrology');
+function act(a){try{state=applyAction(state,flow,{...a,equipmentId:'metrology'},at());render();}catch(e){ui.content.querySelector('#action-error').textContent=e.message;}}
+function render(){ui.show(metrology.name,'METROLOGY / QA',true);ui.content.innerHTML=equipmentPanel(metrology,state,flow);bindMetrology(ui.content,act);bindToolActions(ui.content,act);
+  ui.content.querySelector('#sign-form')?.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.currentTarget);act({type:'sign',name:d.get('signature'),acknowledgeDefects:d.get('acknowledge')==='on'});});}
+function oxide(){let s=until(1);state=applyAction(s,flow,{type:'execute',equipmentId:'furnace',input:input(s,currentTask(s,flow).operation)},at());render();}
+function poly(){let s=until(5);const op=currentTask(s,flow).operation;state=applyAction(s,flow,{type:'execute',equipmentId:'deposition',input:{...input(s,op),zoneSpreadC:15}},at());render();}
+document.querySelector('#qa-oxide').onclick=oxide;document.querySelector('#qa-poly').onclick=poly;oxide();
+</script></html>

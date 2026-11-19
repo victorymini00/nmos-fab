@@ -1,3 +1,4 @@
+import {knownThickness} from './metrologyPanel.js';
 import {DEPOSITION as D} from '../constants.js';
 import {depositFilm} from '../systems/fabrication.js';
 const n=v=>Number(v).toFixed(1),pct=v=>(v*100).toFixed(2);
@@ -41,12 +42,13 @@ export function fabricationSection(state,mini=false){
   const metalOpen=pattern.metal?mean(geometry.metal?.openValues):films.metal?.meanNm??0;
   const metalWire=pattern.metal?mean(geometry.metal?.protectedValues):films.metal?.meanNm??0;
   const cols=[['Field',state.fieldOxideNm,polyOpen,ildProtected,metalOpen],['S/D',state.screenOxideNm??state.activeOxideNm,polyOpen,ildOpen,metalWire],['Gate',state.gateOxideNm??state.activeOxideNm,polyGate,ildProtected,metalWire],['S/D',state.screenOxideNm??state.activeOxideNm,polyOpen,ildOpen,metalWire],['Field',state.fieldOxideNm,polyOpen,ildProtected,metalOpen]];
-  const layer=(type,value,max,scale)=>value>0?`<div class="film-layer ${type}-layer" title="${type}: ${n(value)} nm" style="height:${Math.max(3,Math.min(max,value/scale))}px"></div>`:'';
+  const layer=(type,value,max,scale)=>value>0?`<div class="film-layer ${type}-layer" title="${type}" style="height:${Math.max(3,Math.min(max,value/scale))}px"></div>`:'';
   const group=state.photo?.group;
   const html=cols.map(([name,oxide,poly,ild,metal],i)=>{
     const opened=(group==='gate'?i!==2:group==='contact'?i===1||i===3:group==='metal'?i===0||i===4:i===2);
     const pr=opened?(state.etch?.openingPrNm??state.photo?.developed?.openingPrNm??state.prNm):state.prNm;
     return `<div class="section-col"><div class="layer-stack">${layer('pr',pr,mini?10:28,mini?100:45)}${layer('metal',metal,mini?10:25,mini?40:15)}${layer('ild',ild,mini?15:45,mini?30:10)}${layer('poly',poly,mini?10:30,mini?20:7)}${layer('oxide',oxide,mini?20:45,mini?20:8)}</div><div class="si-layer ${state.anneal&&(i===1||i===3)?'doped':''}">${mini?name:state.anneal&&(i===1||i===3)?'n+ '+name:name+' / Si'}</div></div>`;
   }).join('');
-  return `<div class="pattern-section extended-section">${html}</div><p class="layer-legend">Gate SiO₂ <strong>${n(state.gateOxideNm??state.activeOxideNm)} nm</strong></p><p class="muted">Poly ${n(polyGate)} · ILD ${n(ildProtected)} · Al ${n(metalWire)} nm</p>${mini?'':`<p>Active/Field SiO₂: ${n(state.activeOxideNm)} / ${n(state.fieldOxideNm)} nm</p><p>보라 PR · 회색 Al · 연청색 ILD · 금색 Poly · 청록 SiO₂ · 남색 Si / 초록 n+</p><p class="muted">층별 두께를 확대·압축한 대표 단면입니다. Contact·배선 연결은 개념 표현이며 실제 마스크 레이아웃/회로 연결을 재현하지 않습니다. 정렬·박리·잔사는 Runsheet의 마스크별 수치로 보존합니다.</p>`}`;
+  const known=knownThickness(state),m=v=>v===undefined?'미측정':n(v)+' nm';
+  return `<div class="pattern-section extended-section">${html}</div><p class="layer-legend">Gate SiO₂ <strong>${m(known.gate)}</strong></p><p class="muted">측정값 · Poly ${m(known.poly)} · ILD ${m(known.ild)} · Al ${m(known.metal)}</p>${mini?'':`<p>Field SiO₂(초기 측정): ${m(known.field)}</p><p>보라 PR · 회색 Al · 연청색 ILD · 금색 Poly · 청록 SiO₂ · 남색 Si / 초록 n+</p><p class="muted">층별 두께를 확대·압축한 대표 단면입니다. Contact·배선 연결은 개념 표현이며 실제 마스크 레이아웃/회로 연결을 재현하지 않습니다. 정렬·박리·잔사는 Runsheet의 마스크별 수치로 보존합니다.</p>`}`;
 }

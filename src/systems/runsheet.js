@@ -3,7 +3,9 @@ import { growOxide } from './physics.js';
 import {coatResist,alignmentResult,developResist,etchOxide} from './lithography.js';
 import {depositFilm,implantPhosphorus,annealImplant,etchPattern} from './fabrication.js';
 import {buildReferenceLot,testElectrical} from './electrical.js';
-export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1};}
+import {createMetrologyState,isThicknessOperation,measureSites,checkReference,calibrate} from './metrology.js';
+import {DEPOSITION as D} from '../constants.js';
+export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState()};}
 export function operations(flow){return flow.stages.flatMap(stage=>stage.operations.map(operation=>({stage,operation})));}
 export function currentTask(state,flow){return operations(flow)[state.cursor]??null;}
 export function latestRecord(state,flow){const task=currentTask(state,flow);return task?[...state.records].reverse().find(r=>r.operationId===task.operation.id&&!r.superseded)??null:null;}
@@ -18,6 +20,12 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
   if(!task)throw new Error('전기적 테스트와 최종 확인 서명을 완료했습니다.');
   const {stage,operation:op}=task;
   const record=latestRecord(state,flow);
+  if(action.type==='check-reference'||action.type==='calibrate'){
+    if(action.equipmentId!=='metrology')throw new Error('두께 측정 장비에서만 실행할 수 있습니다.');
+    const result=action.type==='calibrate'?calibrate(state):checkReference(state);
+    state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:action.type==='calibrate'?'계측 장비 교정':'기준 시료 측정',operationId:action.type==='calibrate'?'metrology-calibration':'metrology-reference',equipmentId:'metrology',input:{},result,executedAt:now,measurement:null,signature:null,autoCompleted:true,superseded:false});
+    return state;
+  }
   if(action.type==='restart-photo'){
     if(action.equipmentId!=='coater'||!canRestartPhoto(state,flow))throw new Error('현재 마스크의 식각 전 코터에서만 포토를 재작업할 수 있습니다.');
     const group=state.photo.group;
@@ -112,6 +120,16 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
   }else if(action.type==='measure'){
     if(!op.measurementRequired||action.equipmentId!==op.measurementEquipmentId)throw new Error('지정된 두께 측정 장비를 사용하세요.');
     if(!record)throw new Error('산화 공정을 먼저 실행하세요.');
+    if(isThicknessOperation(op)){
+      // 정밀 계측: 참값 대신 선택 지점의 관측값으로 판정합니다. 재측정 가능.
+      const obs=measureSites(state,record.result,action.sites),res=record.result;let extra,pass;
+      if(op.modelId==='deal-grove'){const ev=evaluateMeasurement(obs.meanNm,op,record.input);extra={targetNm:ev.targetNm,deviation:ev.deviation};pass=ev.pass;}
+      else if(op.modelId==='gate-oxide'){const t=res.targetNm;extra={targetNm:t,deviation:(obs.meanNm-t)/t};pass=Math.abs(extra.deviation)<=op.thicknessToleranceFraction&&record.input.ambient==='dry';}
+      else{const t=res.targetNm;extra={targetNm:t,deviation:(obs.meanNm-t)/t,uniformityLimit:res.uniformityLimit,material:res.material};pass=Math.abs(extra.deviation)<=D.thicknessTolerance&&(obs.nonuniformity??0)<=res.uniformityLimit&&(res.material!=='metal'||res.contactReady===true);}
+      const measurement={equipmentId:action.equipmentId,measuredAt:now,metrology:true,thicknessNm:Number(obs.meanNm.toFixed(C.measurementDecimals)),...obs,...extra,pass};
+      record.measurements=[...(record.measurements??[]),measurement];record.measurement=measurement;
+      return state;
+    }
     if(record.measurement)throw new Error('이미 이 공정 결과를 측정했습니다.');
     if(op.measurementType){record.measurement={equipmentId:action.equipmentId,measuredAt:now,kind:op.measurementType,...structuredClone(record.result)};}
     else{const value=Number(record.result.thicknessNm.toFixed(C.measurementDecimals));record.measurement={equipmentId:action.equipmentId,thicknessNm:value,measuredAt:now,...evaluateMeasurement(value,op,record.input)};}

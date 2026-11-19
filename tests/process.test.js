@@ -36,7 +36,7 @@ test('clean -> signed clean -> oxidation -> metrology -> signature; no stage ski
   state=applyAction(state,flow,oxide);assert.equal(nextEquipment(state,flow),'metrology');
   assert.throws(()=>applyAction(state,flow,sign));assert.throws(()=>applyAction(state,flow,oxide));
   assert.throws(()=>applyAction(state,flow,{...measure,equipmentId:'furnace'}));
-  state=applyAction(state,flow,measure);assert.equal(state.cursor,1);assert.equal(state.records[1].measurement.thicknessNm,375.6);
+  state=applyAction(state,flow,measure);assert.equal(state.cursor,1);assert.ok(Math.abs(state.records[1].measurement.thicknessNm-375.6)<2);assert.notEqual(state.records[1].measurement.thicknessNm,state.records[1].result.thicknessNm);
   assert.throws(()=>applyAction(state,flow,{...sign,name:'  '}));
   state=applyAction(state,flow,sign);assert.equal(state.cursor,2);assert.equal(currentTask(state,flow).stage.number,2);assert.ok(state.records.every(r=>r.signature));
 });

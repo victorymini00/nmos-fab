@@ -119,3 +119,18 @@ export const VISUALS = Object.freeze({
   // 패널이 열려 있으면 N프레임마다 한 번만 렌더링
   pausedRenderEvery: 6
 });
+
+// 정밀 계측(분광 엘립소미터/반사율 두께 측정기) 교육용 모델. 모든 값은 검증 필요.
+// 참값(공정 모델 결과)과 관측값을 분리합니다: 관측값 = 참값 + 장비 편향 + 반복 오차.
+export const METROLOGY = Object.freeze({
+  // 산화로 위치별 두께 비(중앙·북·동·남·서). 평균 1.000이 되도록 정해 평균 두께는 모델값과 같습니다.
+  oxideSiteFactors: [.996, 1.000, 1.002, .999, 1.003],
+  // 반복 정밀도(1σ) = max(floor, fraction × 두께). 교육용 가정.
+  repeatabilityFloorNm: .3, repeatabilityFraction: .002,
+  // 측정 지점 1개마다 장비 편향이 조금씩 쌓이는 드리프트 [nm/점]. 교정하면 0으로 돌아갑니다.
+  driftNmPerSite: .08,
+  // 인증 기준 시료(SiO₂ 100.0 nm)와 반복 측정 횟수, 인증 불확도
+  referenceNm: 100, referenceRepeats: 3, referenceUncertaintyNm: .5,
+  // 시간 비용 [분]
+  minutesPerSite: 2, referenceMinutes: 6, calibrationMinutes: 15
+});
