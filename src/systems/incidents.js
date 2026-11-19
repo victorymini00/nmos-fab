@@ -31,6 +31,8 @@ export function applyOxidationFault(state,op,input,growth){
   const inc=state.incident;
   if(!is001(inc)||inc.faultApplied||op.id!==FIELD)return growth(input.timeMinutes);
   inc.faultApplied=true;
+  // 캠페인 예방 정비로 타이머를 고친 경우: 고장이 웨이퍼에 닿지 않음
+  if(inc.preventedBy){inc.phase='prevented';return growth(input.timeMinutes);}
   if(inc.cause==='overrun'){const actual=input.timeMinutes*I.overrunFactor,result=growth(actual);return {...result,hidden:{actualMinutes:actual}};}
   const result=growth(input.timeMinutes);
   if(inc.cause==='local')return {...result,siteFactors:M.oxideSiteFactors.map((f,i)=>['중앙','북','동','남','서'][i]===I.localSite?I.localFactor:f)};

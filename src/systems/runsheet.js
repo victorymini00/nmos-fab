@@ -7,8 +7,9 @@ import {createMetrologyState,isThicknessOperation,measureSites,checkReference,ca
 import {DEPOSITION as D,ADVISOR,INCIDENT2} from '../constants.js';
 import {validateMeetingAction} from './advisor.js';
 import * as Q2 from './incident002.js';
+import {startCampaign,performMaintenance,campaignSignGate,closeCampaign,evaluateCampaign} from './campaign.js';
 import {startIncident,applyOxidationFault,afterMeasurement,holdLot,onReferenceCheck,inspectLog,diagnose,changeDisposition,signGate} from './incidents.js';
-export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState(),incident:null};}
+export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState(),incident:null,campaign:null};}
 export function operations(flow){return flow.stages.flatMap(stage=>stage.operations.map(operation=>({stage,operation})));}
 export function currentTask(state,flow){return operations(flow)[state.cursor]??null;}
 export function latestRecord(state,flow){const task=currentTask(state,flow);return task?[...state.records].reverse().find(r=>r.operationId===task.operation.id&&!r.superseded)??null:null;}
@@ -20,11 +21,17 @@ export function canRestartPhoto(state,flow){const t=currentTask(state,flow);retu
 export function evaluateMeasurement(value,operation,input){const target=targetThickness(operation),deviation=(value-target)/target;return {targetNm:target,deviation,pass:Math.abs(deviation)<=operation.thicknessToleranceFraction&&input.ambient===operation.parameters.find(p=>p.key==='ambient').target};}
 export function applyAction(previous,flow,action,now=new Date().toISOString()) {
   const state=structuredClone(previous),task=currentTask(state,flow);
+  // 운영 캠페인: 종료된 Lot은 더 진행하지 않음. 시작·종료 기록은 서명 완료 후에도 가능해야 해서 먼저 처리.
+  if(state.campaign?.phase==='closed')throw new Error('캠페인이 끝난 Lot이에요. Runsheet에서 새 Lot을 시작하세요.');
+  const campaignRecord=(title,operationId,result)=>state.records.push({id:state.nextRecord++,stageNumber:task?.stage.number??12,stageTitle:title,operationId,equipmentId:'ops',input:{},result,executedAt:now,measurement:null,signature:null,autoCompleted:true,superseded:false});
+  if(action.type==='start-campaign'){const result=startCampaign(state,action,now,startIncident);campaignRecord('고객 주문 접수','campaign-start',result);return state;}
+  if(action.type==='campaign-close'){const result=closeCampaign(state,flow,action);campaignRecord('주문 종료 판단','campaign-close',result);state.campaign.phase='closed';state.campaign.closedAt=now;state.campaign.evaluation=evaluateCampaign(state,flow);return state;}
   if(!task)throw new Error('전기적 테스트와 최종 확인 서명을 완료했습니다.');
   const {stage,operation:op}=task;
   const record=latestRecord(state,flow);
   const log=(title,operationId,equipmentId,result,input={})=>state.records.push({id:state.nextRecord++,stageNumber:stage.number,stageTitle:title,operationId,equipmentId,input,result,executedAt:now,measurement:null,signature:null,autoCompleted:true,superseded:false});
-  if(action.type==='start-incident'){startIncident(state,action,now);log('돌발 상황 퀘스트 시작','incident-start','hud',{kind:'incident-start',title:`${state.incident.id} ${state.incident.title}`});return state;}
+  if(action.type==='campaign-maintenance'){log('설비 정비','campaign-maintenance',action.equipmentId,performMaintenance(state,action));return state;}
+  if(action.type==='start-incident'){if(state.campaign)throw new Error('캠페인 Lot에서는 퀘스트를 따로 시작하지 않아요.');startIncident(state,action,now);log('돌발 상황 퀘스트 시작','incident-start','hud',{kind:'incident-start',title:`${state.incident.id} ${state.incident.title}`});return state;}
   if(action.type==='incident-hold'){holdLot(state);log('Lot HOLD','incident-hold','metrology',{kind:'incident-hold'});return state;}
   if(action.type==='inspect-log'){
     if(action.equipmentId!=='furnace')throw new Error('산화로에서 공정 로그를 조회하세요.');
@@ -161,6 +168,7 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     if(!record)throw new Error('공정을 먼저 실행하세요.');
     const station=op.measurementRequired?op.measurementEquipmentId:op.equipmentId;
     if(action.equipmentId!==station)throw new Error('현재 확인 장비에서 서명하세요.');
+    if(record.measurement)campaignSignGate(state,op,record);
     const gate=signGate(state,op,record,action);
     if(op.measurementRequired&&gate!=='override'&&(!record.measurement||(!record.measurement.pass&&!op.acceptDefects)))throw new Error('측정값과 분위기가 목표를 만족해야 확인 서명할 수 있습니다. 산화로에서 재작업하거나 새 Lot을 시작하세요.');
     if(gate!=='override'&&record.measurement&&!record.measurement.pass&&op.acceptDefects&&action.acknowledgeDefects!==true)throw new Error('검사에서 확인된 결함을 인지했다는 체크가 필요합니다.');

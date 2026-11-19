@@ -111,15 +111,15 @@ export function verifyRetest(state,result,now){
 export function verifyScrap(state,now){
   const inc=state.incident;if(inc?.phase!=='action'||!inc.action)throw new Error('조치를 먼저 실행하세요.');
   const d=inc.action.disposition;if(d==='reseat-retest')throw new Error('재접촉 조치는 전기적 테스트 재측정으로 검증합니다.');
-  let ok=false,note='결과대로 서명하는 조치는 OPEN 원인을 해결하지 못해 검증할 수 없어요.';
+  let ok=false,autoCheck=null,note='결과대로 서명하는 조치는 OPEN 원인을 해결하지 못해 검증할 수 없어요.';
   if(d.startsWith('scrap')){
     const kind=d==='scrap-contact'?'contact-chain':'metal-continuity';
-    if(!inc.checks.some(c=>c.kind===kind))check(state,kind,now);
+    if(!inc.checks.some(c=>c.kind===kind)){const res=check(state,kind,now);autoCheck={kind,label:res.label,minutes:res.minutes};}
     ok=inc.checks.find(c=>c.kind===kind).result.positive===true;
     note=ok?`${CHECKS[kind].label}에서 결함이 재현돼 개선 대상 공정이 맞음을 확인`:`${CHECKS[kind].label}는 정상. 이 조치로는 원인을 해결하지 못함`;
   }
   finishVerification(state,ok,now,note);
-  return {kind:'incident2-verify',ok,note};
+  return {kind:'incident2-verify',ok,note,autoCheck};
 }
 function finishVerification(state,ok,now,note){
   const inc=state.incident;inc.verification={ok,at:now,note,attempts:(inc.verification?.attempts??0)+1};

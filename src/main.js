@@ -18,6 +18,7 @@ import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js
 import {bindReportExport} from './ui/reportExport.js';
 import {signedElectrical} from './systems/report.js';
 import {equipmentStatuses} from './systems/equipmentStatus.js';
+import {opsView,opsHud,bindOps,maintenanceSection,campaignStartSection} from './ui/opsPanel.js';
 import './ui/styles.css';
 
 const root=document.querySelector('#app');
@@ -26,7 +27,7 @@ const loaded=persistence.load();let state=loaded.state,world,view=null,lab=loadL
 const ui=createUI(root,layout,{
   onInteract:interact,onClose:()=>{view=null;world?.setPaused(false);},
   onReset:()=>{world?.reset();ui.message('방진복 착용실 입구로 이동했습니다.');},
-  onRunsheet:()=>open('runsheet'),onSection:()=>open('section'),
+  onRunsheet:()=>open('runsheet'),onSection:()=>open('section'),onOps:()=>open('ops'),
   onGuide:()=>{const id=nextEquipment(state,flow);if(id)world?.walkTo(id);}
 });
 function refresh(){
@@ -34,7 +35,9 @@ function refresh(){
   const name=layout.equipment.find(e=>e.id===next)?.name;
   const text=!task?`${state.electrical.grade} 등급 · Runsheet에서 전체 보고서를 저장할 수 있습니다.`:task.operation.modelId==='electrical'?(r?'전기적 결과를 확인하고 최종 서명하세요.':'전기적 테스트 장비에서 Vt와 Id–Vg를 측정하세요.'):r?(task.operation.measurementRequired?(r.measurement?(r.measurement.pass?'검사 합격 · 계측 장비에서 확인 서명하세요.':task.operation.acceptDefects?'결함 확인 · 인지 서명으로 계속하거나 재작업하세요.':'조건 이탈 · 재작업 또는 새 Lot이 필요합니다.'):`${name}에서 측정·검사하세요.`):'공정 완료 · 확인 서명하세요.'):`${name}에서 ${task.operation.modelId==='exposure'?'마스크 정렬과 노광':'현재 작업'}을 시작하세요.`;
   const inc=state.incident,two=inc?.id==='INCIDENT-002',questText=inc?.phase==='alarm'?(two?'⚠ OPEN 감지! 전기적 테스트 장비에서 Lot을 HOLD하고 원인을 조사하세요.':'⚠ OOS 경고! 계측 장비에서 Lot을 HOLD하고 원인을 조사하세요.'):inc?.phase==='hold'?`HOLD 중 · 진단 미완료 · 증거를 모아 원인을 판정하세요 (조사 ${inc.minutes}분)`:two&&inc?.phase==='action'?'판정 완료 · 조치를 실행하고 검증하세요.':null;
-  ui.mission(task?`${task.stage.number}. ${task.stage.title}`:'NMOS 제작 · 테스트 완료',questText??text,['alarm','hold'].includes(inc?.phase)||(two&&inc?.phase==='action')?(two?'tester':'metrology'):next);
+  const c=state.campaign,opsText=c?.phase==='closed'?`캠페인 종료 · 운영 패널(O)에서 평가를 확인하세요. 새 주문은 Runsheet에서 시작해요.`:c&&!task?'최종 서명 완료 · 운영 패널(O)에서 출하·보류를 결정하세요.':null;
+  ui.ops(c?opsHud(state,flow):null);
+  ui.mission(task?`${task.stage.number}. ${task.stage.title}`:'NMOS 제작 · 테스트 완료',questText??opsText??text,['alarm','hold'].includes(inc?.phase)||(two&&inc?.phase==='action')?(two?'tester':'metrology'):next);
   ui.mini(crossSection(state,flow,true));world?.setGuidance(next);
   world?.setEquipmentStatus(equipmentStatuses(state,flow,layout.equipment.map(e=>e.id)));
 }
@@ -46,7 +49,7 @@ function renderView(){
   if(view.type==='equipment'){
     const isElectrical=view.equipment.id==='tester'&&(currentTask(state,flow)?.operation.modelId==='electrical'||!!state.electrical);
     ui.show(view.equipment.name,isElectrical?'ELECTRICAL TEST / NMOS-001':'EQUIPMENT INTERFACE',isElectrical);
-    ui.content.innerHTML=isElectrical?electricalPanel(state,flow,layout):equipmentPanel(view.equipment,state,flow);
+    ui.content.innerHTML=(isElectrical?electricalPanel(state,flow,layout):equipmentPanel(view.equipment,state,flow))+maintenanceSection(state,view.equipment.id);
     const act=action=>perform({...action,equipmentId:view.equipment.id});
     ui.content.querySelector('#run-electrical')?.addEventListener('click',()=>act({type:'execute'}));
     ui.content.querySelector('#clean')?.addEventListener('click',()=>act({type:'execute'}));
@@ -55,7 +58,8 @@ function renderView(){
     bindToolActions(ui.content,act);
     bindIncident(ui.content,{global,act,newIncidentLot});
     bindIncident002(ui.content,{global,act});
-    bindAdvisor(ui.content,{global,getState:()=>state,rerender:renderView});
+    bindAdvisor(ui.content,{global,getState:()=>state,rerender:renderView,flow});
+    bindOps(ui.content,{global,act,newCampaignLot});
     bindAlignment(ui.content);
     const operation=currentTask(state,flow)?.operation;
     if(operation?.modelId==='deposit')bindDeposition(ui.content,state,operation);
@@ -63,17 +67,23 @@ function renderView(){
     ui.content.querySelector('#restart-photo')?.addEventListener('click',()=>act({type:'restart-photo'}));
     ui.content.querySelector('#sign-form')?.addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget);act({type:'sign',name:data.get('signature'),acknowledgeDefects:data.get('acknowledge')==='on'});});
     bindReportExport(ui.content,state,flow,layout);
+  }else if(view.type==='ops'){
+    ui.show('운영 패널',`OPERATIONS / ${state.campaign?state.campaign.orderId:'자유 실습'}`,true);
+    ui.content.innerHTML=opsView(state,flow,Date.now());
+    bindOps(ui.content,{global,act:()=>{},newCampaignLot});
   }else if(view.type==='lab'){
     ui.show('공정 개선 실험실','PROCESS LAB · POLY LPCVD',true);
     ui.content.innerHTML=labView(lab,state,flow,!currentTask(state,flow));
     bindLab(ui.content,{getLab:()=>lab,setLab:l=>{lab=l;saveLab(lab);renderView();},getState:()=>state,flow});
   }else if(view.type==='runsheet'){
     ui.show('Lot 공정 지시서','RUNSHEET / NMOS-001',true);
-    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><section class="incident armed"><div class="incident-head"><span>FAB INCIDENT</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}<p><button id="open-lab" class="primary">공정 개선 실험실 열기 <kbd>L</kbd></button></p>`:runsheetPanel(state,flow,layout);
+    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details>${campaignStartSection(state)}<section class="incident armed"><div class="incident-head"><span>FAB INCIDENT</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}<p><button id="open-lab" class="primary">공정 개선 실험실 열기 <kbd>L</kbd></button> <button id="open-ops" class="secondary">운영 패널 <kbd>O</kbd></button></p>`:runsheetPanel(state,flow,layout);
     bindReportExport(ui.content,state,flow,layout);
     ui.content.querySelector('#quest-start')?.addEventListener('submit',e=>{e.preventDefault();newIncidentLot(readQuestStart(e.currentTarget));});
     bindExperiment(ui.content,renderView);
     ui.content.querySelector('#open-lab')?.addEventListener('click',()=>open('lab'));
+    ui.content.querySelector('#open-ops')?.addEventListener('click',()=>open('ops'));
+    bindOps(ui.content,{global,act:()=>{},newCampaignLot});
     ui.content.querySelector('#new-lot')?.addEventListener('click',()=>{
       state=createLot();ui.saved(persistence.reset());world?.reset();refresh();renderView();ui.message('새 Lot을 시작합니다. 이전 Lot 기록을 초기화했습니다.');
     });
@@ -99,13 +109,18 @@ function newIncidentLot(options={}){
   ui.message('돌발 상황 퀘스트를 시작했어요. 평소처럼 공정을 진행하세요.');
 }
 // 퀘스트 평가가 확정되면 실험 기록에 한 번만 추가(001은 판정 시, 002는 검증 완료 시)
-function logExperiment(){const row=experimentRow(state);if(row&&(state.incident.id!=='INCIDENT-002'||state.incident.phase==='closed'))appendExperimentLog(row);}
+// 캠페인 Lot: 첫 작업 전에 주문을 접수(새 Lot). 주문의 돌발 상황은 숨은 원인으로 함께 시작됨.
+function newCampaignLot(orderId){
+  state=createLot();ui.saved(persistence.reset());world?.reset();global({type:'start-campaign',orderId});
+  ui.message(`주문 ${orderId}를 접수했어요. 기한·예산은 운영 패널(O)에서 확인하세요.`);
+}
+function logExperiment(){if(state.campaign)return;const row=experimentRow(state);if(row&&(state.incident.id!=='INCIDENT-002'||state.incident.phase==='closed'))appendExperimentLog(row);}
 function interact(){if(ui.isOpen)return;const e=world?.getNearby();if(e)open('equipment',e);}
 try{
   world=createWorld(ui.container,layout,{onNearby:e=>ui.nearby(e),onFrame:s=>ui.update(s),onMessage:t=>ui.message(t)});
   refresh();ui.saved(persistence.save());if(loaded.notice)ui.message(loaded.notice);
   window.addEventListener('keydown',e=>{
     if(e.repeat||e.target.matches('input,select,textarea')||ui.isOpen)return;
-    if(e.code==='KeyE')interact();if(e.code==='KeyR')open('runsheet');if(e.code==='KeyC')open('section');if(e.code==='KeyL')open('lab');
+    if(e.code==='KeyE')interact();if(e.code==='KeyR')open('runsheet');if(e.code==='KeyC')open('section');if(e.code==='KeyL')open('lab');if(e.code==='KeyO')open('ops');
   });
 }catch(error){console.error(error);const el=document.createElement('div');el.className='fatal';el.textContent='3D 화면을 시작하지 못했습니다. WebGL 2 지원과 브라우저 하드웨어 가속을 확인해 주세요.';root.append(el);}

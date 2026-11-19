@@ -12,7 +12,7 @@ function evidenceList(state){
 }
 // 계측 장비 화면 위쪽에 붙는 퀘스트 영역
 export function incidentSection(state){
-  const inc=state.incident;if(inc?.id!=='INCIDENT-001'||inc.phase==='missed')return '';
+  const inc=state.incident;if(inc?.id!=='INCIDENT-001'||inc.phase==='missed'||inc.phase==='prevented')return '';
   const head=`<div class="incident-head"><span>FAB INCIDENT · ${esc(inc.id)}</span><strong>${esc(inc.title)}</strong></div>`;
   if(inc.phase==='armed')return `<section class="incident armed">${head}<p>돌발 상황 퀘스트가 진행 중이에요. 이번 산화막 측정에서 무언가 이상할 수 있어요. 측정 지점은 신중하게 고르세요.</p></section>`;
   if(inc.phase==='alarm')return `<section class="incident alarm">${head}<p class="oos">OOS 경고 · 측정 결과가 규격을 벗어났어요</p><p>목표 ${n(inc.alarm.targetNm)} nm ±10% · 측정 평균 ${n(inc.alarm.meanNm)} nm${inc.alarm.outSites.length?` · 규격 밖 지점: ${inc.alarm.outSites.join(', ')}`:''}</p><p>원인을 모르는 상태에서 다음 Run 조건을 바꾸거나 그대로 진행하면 안 돼요. 먼저 Lot을 보류하고 조사하세요.</p><button id="incident-hold" class="primary">Lot HOLD · 원인 조사 시작</button></section>`;

@@ -1,8 +1,20 @@
 import {ADVISOR as A,METROLOGY as M,INCIDENT2 as Q} from '../constants.js';
 import {CHECKS as CHECKS2} from './incident002.js';
+import {operationsEvidence} from './campaign.js';
 // AI 부서 회의에 넘길 정보는 "플레이어가 관측한 증거"뿐입니다.
 // 숨은 원인(incident.cause), 장비 숨은 상태(hidden, siteFactors, biasNm), 실제 두께는 절대 넣지 않습니다.
-export const ROLE_LABELS={PE:'공정 엔지니어 (PE)',EE:'설비 엔지니어 (EE)',MET:'계측 엔지니어 (MET)'};
+export const ROLE_LABELS={PE:'공정 엔지니어 (PE)',EE:'설비 엔지니어 (EE)',MET:'계측 엔지니어 (MET)',QA:'품질보증 (QA)',PC:'생산관리 (PC)'};
+// 캠페인(고객 주문) Lot이면 QA·생산관리가 회의에 추가됩니다.
+export const CAMPAIGN_ROLES=['QA','PC'];
+export const rolesFor=p=>p?.evidence?.some(e=>e.id==='OPS')?[...A.roles,...CAMPAIGN_ROLES]:[...A.roles];
+const ALL_ROLES=[...A.roles,...CAMPAIGN_ROLES];
+// 운영 정보는 게임 원장이 계산한 값만 넣습니다(플레이어가 패널에서 보는 값과 같음).
+function withOperations(packet,state,flow){
+  if(!state.campaign||!flow)return packet;
+  const ops=operationsEvidence(state,flow);if(!ops)return packet;
+  const maint=state.records.filter(r=>r.operationId==='campaign-maintenance').map((r,i)=>({id:`PM${i+1}`,type:'maintenance',item:r.result.label,target:r.result.target,finding:r.result.finding}));
+  return {...packet,evidence:[...packet.evidence,...maint,ops]};
+}
 const r1=v=>Math.round(v*10)/10;
 // INCIDENT 002: 증상(OPEN), 모델 기반 예상 특성, 실행한 검사 결과만. 숨은 원인·미실행 검사·장비 내부 상태 제외.
 function packet002(state,question){
@@ -15,19 +27,19 @@ function packet002(state,question){
     modelExpectation:r?.reference?{vtV:Math.round(r.reference.vtV*1000)/1000,ionMilliA:Math.round(r.reference.ionA*1e6)/1000,note:'공정 이력으로 계산한 예상값이며 실제 측정값이 아님'}:null,
     evidence,investigationMinutes:inc.minutes,question:String(question??'').slice(0,A.maxTextLength)};
 }
-export function buildEvidencePacket(state,question=''){
-  if(state.incident?.id==='INCIDENT-002')return packet002(state,question);
+export function buildEvidencePacket(state,question='',flow=null){
+  if(state.incident?.id==='INCIDENT-002')return withOperations(packet002(state,question),state,flow);
   const inc=state.incident,field=[...state.records].reverse().find(r=>r.operationId==='field-oxidation'&&!r.superseded);
   const evidence=[];let i=0;
   for(const m of field?.measurements??[])evidence.push({id:`M${++i}`,type:'thickness-measurement',sites:m.observed.map(o=>({site:o.name,nm:o.valueNm})),meanNm:r1(m.meanNm),nonuniformityPct:m.nonuniformity===null?null:r1(m.nonuniformity*100),sitesMeasured:m.observed.length});
   let j=0;for(const r of state.records.filter(r=>r.operationId==='metrology-reference'))evidence.push({id:`R${++j}`,type:'reference-sample',certifiedNm:r.result.certifiedNm,readingsNm:r.result.readings,meanNm:r1(r.result.meanNm),offsetNm:r1(r.result.offsetNm)});
   let k=0;for(const r of state.records.filter(r=>r.operationId==='incident-log'))evidence.push({id:`L${++k}`,type:'furnace-log',recipeMinutes:r.result.recipeMinutes,loggedRunMinutes:r1(r.result.actualMinutes),temperatureC:r.result.temperatureC,ambient:r.result.ambient,note:r.result.note});
   let c=0;for(const r of state.records.filter(r=>r.operationId==='metrology-calibration'))evidence.push({id:`C${++c}`,type:'metrology-calibration'});
-  return {questId:inc?.id??null,quest:inc?.title??null,step:'Field 산화 (습식)',targetNm:inc?.alarm?r1(inc.alarm.targetNm):null,tolerancePct:10,
+  return withOperations({questId:inc?.id??null,quest:inc?.title??null,step:'Field 산화 (습식)',targetNm:inc?.alarm?r1(inc.alarm.targetNm):null,tolerancePct:10,
     recipe:field?{temperatureC:field.input.temperatureC,timeMinutes:field.input.timeMinutes,ambient:field.input.ambient}:null,
     alarm:inc?.alarm?{meanNm:r1(inc.alarm.meanNm),outOfSpecSites:inc.alarm.outSites}:null,evidence,
     metrologyTool:{sitesSinceCalibration:state.metrology.sitesSinceCalibration,calibrations:state.metrology.calibrations,referenceChecks:state.metrology.referenceChecks,repeatability1SigmaNm:Math.max(M.repeatabilityFloorNm,(inc?.alarm?.targetNm??0)*M.repeatabilityFraction)},
-    investigationMinutes:inc?.minutes??0,question:String(question??'').slice(0,A.maxTextLength)};
+    investigationMinutes:inc?.minutes??0,question:String(question??'').slice(0,A.maxTextLength)},state,flow);
 }
 // 규칙 기반 회의: AI를 쓸 수 없을 때의 대체 수단. 증거가 없으면 판단을 보류합니다.
 function rules002(p){
@@ -45,7 +57,20 @@ function rules002(p){
   const strong=[pe,ee,met].filter(o=>o.confidence==='high').length;
   return {opinions:[{role:'PE',...pe},{role:'EE',...ee},{role:'MET',...met}],summary:strong?'근거가 있는 가설이 있습니다. 다른 검사 결과와 모순되지 않는지 확인하세요.':'아직 원인을 확정할 근거가 없습니다. 비용이 적은 검사부터 진행하세요.'};
 }
-export function ruleBasedMeeting(p){
+// QA·생산관리 규칙 기반 의견: OPS 항목의 숫자를 그대로 인용만 합니다.
+function campaignOpinions(p,base){
+  const ops=p.evidence.find(e=>e.id==='OPS');if(!ops)return base;
+  const q=ops.confirmedQuality,unsure=ops.estimate.uncertain.length,slack=r1(ops.dueMinutes-ops.estimate.etaMinutes);
+  const open=/측정 불가/.test(q.finalElectrical??'');
+  const qa={role:'QA',hypothesis:/HOLD/.test(ops.hold)&&!/해제/.test(ops.hold)?`${ops.hold}. 원인 판정 전에는 다음 공정 진행이나 출하를 하지 않습니다. 확인된 품질: 검사 합격 ${q.inspectionsPassed}건, 결함 인지 ${q.defectsAccepted.length}건.`:open?'최종 전기적 테스트가 측정 불가라 주문 규격 적합을 확인할 수 없습니다. 이 상태로는 출하 대상이 아닙니다.':`확인된 품질: 검사 합격 ${q.inspectionsPassed}건, 결함 인지 ${q.defectsAccepted.length}건. 최종 규격 판정은 전기적 테스트 후에 가능합니다.`,
+    basis:['OPS'],next:'판정에 필요한 핵심 증거를 확보한 뒤 결정 · 필수 계측·서명은 생략 불가',confidence:'medium'};
+  const cheap=[...ops.optionPrices].sort((a,b)=>a.cost-b.cost)[0];
+  const pc={role:'PC',hypothesis:`납기까지 가상 ${ops.minutesToDue}분, 예산 잔여 ${ops.remainingBudget}. 예상 완료 ${ops.estimate.etaMinutes}분(납기 대비 ${slack>=0?'+':''}${slack}분)${unsure?`, 미확정 요인 ${unsure}개라 더 늦어질 수 있음`:''}.`,
+    basis:['OPS'],next:slack<0?'기한 초과 예상: 고객 납기 협의를 준비하되 검사 축소로 맞추지 않음':cheap?`여유 안에서 비용이 적은 확인부터 (예: ${cheap.option} ${cheap.minutes}분·비용 ${cheap.cost})`:'계획대로 진행',confidence:unsure?'low':'medium'};
+  return {...base,opinions:[...base.opinions,qa,pc]};
+}
+export function ruleBasedMeeting(p){return campaignOpinions(p,baseRules(p));}
+function baseRules(p){
   if(p.questId==='INCIDENT-002')return rules002(p);
   const ref=p.evidence.filter(e=>e.type==='reference-sample').at(-1),log=p.evidence.filter(e=>e.type==='furnace-log').at(-1);
   const maps=p.evidence.filter(e=>e.type==='thickness-measurement'&&e.sitesMeasured===5),map=maps.at(-1);
@@ -73,7 +98,15 @@ export const SYSTEM_PROMPT_002=`너는 반도체 팹의 긴급 품질 회의에 
 6. 플레이어 질문(question)이 있으면 summary에서 짧게 답한다.
 7. 한국어, 짧게. 아래 JSON만 출력한다(설명·코드블록 없이).
 {"opinions":[{"role":"PE","hypothesis":"...","basis":["C1"],"next":"...","confidence":"low|medium|high"},{"role":"EE",...},{"role":"MET",...}],"summary":"..."}`;
-export const systemPromptFor=p=>p?.questId==='INCIDENT-002'?SYSTEM_PROMPT_002:SYSTEM_PROMPT;
+export const CAMPAIGN_ADDENDUM=`
+추가 상황: 이 Lot은 고객 주문(완료 기한·예산·최종 전기 규격)이 걸린 운영 캠페인이다. 회의에 QA(품질보증)와 PC(생산관리)도 참석한다.
+추가 규칙:
+A. 시간·비용·납기·예산·예상 완료 숫자는 증거 OPS 항목에 있는 값만 인용한다. 새 비용·시간·수율·가동률·품질 결과를 계산하거나 지어내지 않는다.
+B. QA는 OPS의 confirmedQuality와 orderSpec만 보고 말한다. 주문 규격 적합이 확인되지 않은 제품의 출하를 권하지 않는다.
+C. PC는 남은 시간(minutesToDue), 예산(remainingBudget), 선택지별 시간·비용(optionPrices)으로 순서를 제안한다. 필수 계측·서명 생략이나 검사 축소로 납기를 맞추는 방법은 제안하지 않는다.
+D. 정비는 이미 가공된 웨이퍼를 고치지 못한다. 정비 효과를 과장하지 않는다.
+E. QA·PC 의견의 basis에는 OPS를 넣는다. opinions는 PE, EE, MET, QA, PC 다섯 개를 이 순서로 출력한다.`;
+export const systemPromptFor=p=>(p?.questId==='INCIDENT-002'?SYSTEM_PROMPT_002:SYSTEM_PROMPT)+(rolesFor(p).length>3?CAMPAIGN_ADDENDUM:'');
 export const SYSTEM_PROMPT=`너는 반도체 팹의 긴급 품질 회의에 참석한 세 명의 엔지니어다: PE(공정), EE(설비), MET(계측).
 상황: 교육용 시뮬레이터의 NMOS Field 습식 산화 후 두께 측정에서 OOS 경고가 떠서 Lot을 HOLD했다.
 규칙:
@@ -90,7 +123,7 @@ export function sanitizeMeeting(raw,packet){
   const text=typeof raw==='string'?raw:JSON.stringify(raw);const start=text.indexOf('{'),end=text.lastIndexOf('}');
   if(start<0||end<=start)throw new Error('AI 응답에서 JSON을 찾지 못했습니다.');
   const data=JSON.parse(text.slice(start,end+1));if(!Array.isArray(data.opinions))throw new Error('AI 응답 형식이 올바르지 않습니다.');
-  const opinions=A.roles.map(role=>{const o=data.opinions.find(o=>o?.role===role);if(!o)throw new Error(`${role} 의견이 없습니다.`);
+  const opinions=rolesFor(packet).map(role=>{const o=data.opinions.find(o=>o?.role===role);if(!o)throw new Error(`${role} 의견이 없습니다.`);
     const basis=(Array.isArray(o.basis)?o.basis:[]).map(String),valid=basis.filter(b=>ids.has(b)),invented=basis.filter(b=>!ids.has(b));
     return {role,hypothesis:clip(o.hypothesis),basis:valid,inventedBasis:invented,next:clip(o.next),confidence:['low','medium','high'].includes(o.confidence)?(valid.length?o.confidence:'low'):'low'};});
   return {opinions,summary:clip(data.summary)};
@@ -106,10 +139,10 @@ export async function callClaude(packet,{apiKey,model=A.defaultModel,fetchFn=glo
 // 상태에 기록할 회의 결과 검증(저장 재생 시에도 동일 규칙)
 export function validateMeetingAction(action){
   if(!['ai','rules'].includes(action.source))throw new Error('회의 출처가 올바르지 않습니다.');
-  if(!Array.isArray(action.opinions)||action.opinions.length!==3)throw new Error('세 부서 의견이 필요합니다.');
+  if(!Array.isArray(action.opinions)||![3,5].includes(action.opinions.length))throw new Error('부서 의견 수가 올바르지 않습니다.');
   const clip=v=>String(v??'').slice(0,A.maxTextLength);
   return {source:action.source,model:action.source==='ai'?clip(action.model):null,question:clip(action.question),summary:clip(action.summary),fallbackReason:action.fallbackReason?clip(action.fallbackReason):null,
-    opinions:action.opinions.map(o=>({role:A.roles.includes(o.role)?o.role:'PE',hypothesis:clip(o.hypothesis),basis:(o.basis??[]).slice(0,8).map(clip),inventedBasis:(o.inventedBasis??[]).slice(0,8).map(clip),next:clip(o.next),confidence:['low','medium','high'].includes(o.confidence)?o.confidence:'low'}))};
+    opinions:action.opinions.map(o=>({role:ALL_ROLES.includes(o.role)?o.role:'PE',hypothesis:clip(o.hypothesis),basis:(o.basis??[]).slice(0,8).map(clip),inventedBasis:(o.inventedBasis??[]).slice(0,8).map(clip),next:clip(o.next),confidence:['low','medium','high'].includes(o.confidence)?o.confidence:'low'}))};
 }
 
 // Gemini API(무료 등급 가능). 키는 헤더로만 보내고 URL·본문에는 넣지 않습니다.

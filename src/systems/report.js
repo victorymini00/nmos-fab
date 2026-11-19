@@ -14,6 +14,10 @@ export function describeResult(r){
   if(r.kind==='incident2-verify')return `검증 ${r.ok?'성공':'실패'}\n${r.note}`;
   if(r.kind==='incident-meeting')return `긴급 회의 (${r.source==='ai'?'AI '+r.model:'규칙 기반'})${r.question?'\n질문: '+r.question:''}\n${r.opinions.map(o=>`${o.role}: ${o.hypothesis} [근거 ${o.basis.join(',')||'없음'}]`).join('\n')}`;
   if(r.kind==='incident-disposition')return `조치 변경: ${r.disposition}`;
+  if(r.kind==='campaign-start')return `고객 주문 접수 ${r.orderId}\n${r.title}\n기한 ${r.dueMinutes}분 / 예산 ${r.budget}`;
+  if(r.kind==='campaign-maintenance')return `정비: ${r.label} (${r.minutes}분 · 비용 ${r.cost})\n적용: ${r.target}\n결과: ${r.finding}`;
+  if(r.kind==='campaign-close')return `주문 종료 판단: ${({ship:'출하',withhold:'출하 보류',scrap:'Lot 폐기'})[r.decision]}`;
+  if(r.kind==='incident2-verify'&&r.autoCheck)return `검증 ${r.ok?'성공':'실패'} (${r.autoCheck.label} ${r.autoCheck.minutes}분)\n${r.note}`;
   if(r.kind==='metrology-calibration')return '계측 장비 교정 · 편향 초기화';
   if(r.metrology)return describeMeasurement(r);
   if(r.kind==='electrical')return `Vt ${r.vtV.toFixed(3)} V\nIon ${r.ionA===null?'산출불가':(r.ionA*1000).toFixed(3)+' mA'}\n${r.grade} / ${r.score}점`;

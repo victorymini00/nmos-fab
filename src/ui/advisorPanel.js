@@ -18,7 +18,7 @@ function meetingCard(m){
 export function advisorSection(state){
   const inc=state.incident,meetings=inc.meetings??[],p=provider(),key=hasKey();
   if(inc.mode==='no-ai')return `<section class="advisor"><h4>긴급 부서 회의</h4><p class="muted">이번 퀘스트는 실험 조건 "AI 회의 없이 혼자 해결"이라 회의를 쓰지 않아요.</p></section>`;
-  return `<section class="advisor"><h4>긴급 부서 회의</h4><p class="muted">PE·EE·계측 엔지니어가 지금까지 확인한 증거만 보고 의견을 내요. 숨은 원인은 모르고, 판정은 내가 해요. 회의 1회 ${A.meetingMinutes}분.</p>
+  return `<section class="advisor"><h4>긴급 부서 회의</h4><p class="muted">PE·EE·계측 엔지니어${state.campaign?'와 QA·생산관리':''}가 지금까지 확인한 증거${state.campaign?'와 운영 원장(남은 시간·예산·비용)':''}만 보고 의견을 내요. 비용·품질·생산 결과는 게임이 계산하고 AI는 만들지 않아요. 숨은 원인은 모르고, 판정은 내가 해요. 회의 1회 ${A.meetingMinutes}분.</p>
   <form id="meeting-form"><label>질문 (선택)<input name="question" maxlength="${A.maxTextLength}" placeholder="예: 기준 시료가 정상이면 다음엔 뭘 봐야 해?"></label><div class="tool-actions"><button class="primary" name="mode" value="ai" ${key?'':'disabled'}>AI 회의 소집 · ${LABEL[p]}</button><button class="secondary" name="mode" value="rules">규칙 기반 회의</button></div><p id="meeting-status" class="muted" role="status">${key?`모델: ${esc(modelOf(p))}`:'AI 회의를 쓰려면 아래 설정에서 API 키를 입력하세요.'}</p></form>
   ${meetings.slice().reverse().map(meetingCard).join('')}
   <details class="model-note" ${key?'':'open'}><summary>AI 설정 (내 API 키)</summary>
@@ -33,11 +33,11 @@ export function meetingSummary(state){
   const ms=state.incident?.meetings??[];if(!ms.length)return '';
   return `<p>긴급 회의 ${ms.length}회 (AI ${ms.filter(m=>m.source==='ai').length}회)</p>${meetingCard(ms.at(-1))}`;
 }
-export function bindAdvisor(content,{global,getState,rerender}){
+export function bindAdvisor(content,{global,getState,rerender,flow=null}){
   const form=content.querySelector('#meeting-form');if(!form)return;
   const status=content.querySelector('#meeting-status');
   form.addEventListener('submit',async e=>{
-    e.preventDefault();const mode=e.submitter?.value??'rules',question=new FormData(form).get('question')??'',packet=buildEvidencePacket(getState(),question);
+    e.preventDefault();const mode=e.submitter?.value??'rules',question=new FormData(form).get('question')??'',packet=buildEvidencePacket(getState(),question,flow);
     for(const b of form.querySelectorAll('button'))b.disabled=true;
     if(mode==='rules'){global({type:'incident-meeting',source:'rules',question,...ruleBasedMeeting(packet)});return;}
     const p=provider(),model=modelOf(p);status.textContent='AI 엔지니어들이 증거를 검토하고 있어요…';

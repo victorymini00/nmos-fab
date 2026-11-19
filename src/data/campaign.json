@@ -1,0 +1,108 @@
+{
+  "note": "「첫 고객 주문」 운영 캠페인의 교육용 가정. 모든 시간·비용 단가와 주문 조건은 실제 팹·고객 데이터가 아니며 검증 필요. 단일 Lot 기준이며 수율·가동률을 나타내지 않음.",
+  "verification": "검증 필요",
+  "units": {"time": "가상 분", "cost": "가상 비용(만원)"},
+  "metrologyPlan": {
+    "requiredSites": 5,
+    "note": "캠페인 측정 계획: 두께 공정의 필수 계측은 5지점을 측정해야 서명할 수 있음(필수 계측 축소로 납기를 맞추는 우회 방지)."
+  },
+  "orders": [
+    {
+      "id": "PO-001",
+      "customer": "가상 고객 A · 센서 모듈 시제품",
+      "title": "NMOS 시제품 1 Lot (표준 납기)",
+      "brief": "표준 납기 주문. 표준 레시피로 진행하면 약 1,290분·1,440이 들어요. 기한·예산 여유가 크지 않아요.",
+      "dueMinutes": 1450,
+      "budget": 1550,
+      "incident": null,
+      "spec": {"vtMinV": -0.15, "vtMaxV": 0.15, "ionMinMilliA": 0.40, "ionMaxMilliA": 0.58, "requireMeasured": true}
+    },
+    {
+      "id": "PO-002",
+      "customer": "가상 고객 B · 아날로그 스위치 평가",
+      "title": "NMOS 시제품 1 Lot (공정 이상 가능)",
+      "brief": "공정 중 이상이 생길 수 있는 주문. 기한·예산에 조사 몇 건을 할 정도의 여유가 있어요.",
+      "dueMinutes": 1600,
+      "budget": 1680,
+      "incident": "001",
+      "spec": {"vtMinV": -0.15, "vtMaxV": 0.15, "ionMinMilliA": 0.40, "ionMaxMilliA": 0.58, "requireMeasured": true}
+    },
+    {
+      "id": "PO-003",
+      "customer": "가상 고객 C · 테스트 구조 검증",
+      "title": "NMOS 시제품 1 Lot (최종 테스트 이상 가능)",
+      "brief": "최종 테스트에서 이상이 생길 수 있는 주문. 기한·예산 여유는 PO-002와 비슷해요.",
+      "dueMinutes": 1600,
+      "budget": 1680,
+      "incident": "002",
+      "spec": {"vtMinV": -0.15, "vtMaxV": 0.15, "ionMinMilliA": 0.40, "ionMaxMilliA": 0.58, "requireMeasured": true}
+    }
+  ],
+  "process": {
+    "note": "공정 1회 = 준비·로딩·안정화(overheadMinutes) + 레시피 시간(입력값). 비용은 장비 사용·재료비를 묶은 1회 단가.",
+    "rca-check": {"overheadMinutes": 60, "cost": 30},
+    "deal-grove": {"overheadMinutes": 60, "cost": 80, "recipeMinutesKey": "timeMinutes"},
+    "hmds": {"overheadMinutes": 15, "cost": 5},
+    "spin": {"overheadMinutes": 15, "cost": 10},
+    "exposure": {"overheadMinutes": 30, "cost": 60},
+    "develop": {"overheadMinutes": 15, "cost": 10, "recipeSecondsKey": "seconds"},
+    "boe": {"overheadMinutes": 20, "cost": 15, "recipeMinutesKey": "minutes"},
+    "strip": {"overheadMinutes": 30, "cost": 10},
+    "gate-oxide": {"overheadMinutes": 60, "cost": 80, "recipeMinutesKey": "timeMinutes"},
+    "deposit": {"overheadMinutes": 45, "cost": 100, "recipeMinutesKey": "minutes"},
+    "pattern-etch": {"overheadMinutes": 30, "cost": 60, "recipeMinutesKey": "minutes"},
+    "implant": {"overheadMinutes": 60, "cost": 150},
+    "anneal": {"overheadMinutes": 30, "cost": 40, "recipeSecondsKey": "seconds"},
+    "electrical": {"overheadMinutes": 45, "cost": 50}
+  },
+  "metrology": {
+    "note": "두께 측정 시간은 기존 계측 엔진(metrology.js)의 지점당 시간을 그대로 씀. 여기서는 비용만 정함.",
+    "costPerSite": 2,
+    "referenceCost": 6
+  },
+  "inspection": {
+    "note": "두께 외 필수 검사(패턴·식각·소자)는 기존 코드에 시간이 없어 여기서 정함.",
+    "pattern": {"minutes": 10, "cost": 8},
+    "etch": {"minutes": 10, "cost": 8},
+    "device": {"minutes": 15, "cost": 10}
+  },
+  "incident001": {"logCost": 3},
+  "incident002": {
+    "note": "검사·조치 시간은 기존 INCIDENT 002 설정(constants.js)을 그대로 쓰고 비용만 정함.",
+    "checkCost": {"history": 2, "contact-chain": 25, "metal-continuity": 15, "probe-reseat": 3},
+    "actionCost": {"reseat-retest": 5, "scrap-contact": 10, "scrap-metal": 10, "ship-as-is": 0},
+    "retestCost": 20
+  },
+  "meeting": {"cost": 10, "note": "회의 시간은 기존 AI 회의 설정(1회 5분)을 씀. AI 응답을 기다린 실제 시간은 넣지 않음. 비용은 참석자 시간 가정."},
+  "rework": {"photoStrip": {"minutes": 30, "cost": 15}},
+  "maintenance": {
+    "furnace-pm": {
+      "label": "산화로 점검 (단계 타이머·열전대)",
+      "equipmentId": "furnace",
+      "minutes": 90,
+      "cost": 120,
+      "target": "산화로의 다음 가동부터 (Field·Gate 산화, 어닐링)",
+      "effect": "단계 타이머·열전대 이상을 찾아 고침. 이미 산화된 막 두께는 바뀌지 않음. 국부 성장 이상(가스 흐름 등)은 점검 범위 밖."
+    },
+    "tester-pm": {
+      "label": "테스터 프로브 카드 점검·교체",
+      "equipmentId": "tester",
+      "minutes": 40,
+      "cost": 60,
+      "target": "다음 전기적 테스트부터의 프로브 접촉 상태",
+      "effect": "탐침 오염·마모를 고침. 소자 내부의 Contact·배선 결함은 바꾸지 않음. 이미 나온 테스트 결과는 다시 측정해야 바뀜."
+    },
+    "metrology-calibration": {
+      "label": "두께 측정 장비 교정",
+      "equipmentId": "metrology",
+      "cost": 20,
+      "target": "다음 두께 측정부터",
+      "effect": "누적된 측정 편향을 0으로 되돌림. 이미 기록한 측정값과 웨이퍼 두께는 바뀌지 않음. 시간은 기존 계측 엔진 설정을 씀."
+    }
+  },
+  "closing": {
+    "ship": {"minutes": 30, "cost": 10, "label": "출하 처리(포장·서류)"},
+    "withhold": {"minutes": 10, "cost": 0, "label": "출하 보류 처리"},
+    "scrap": {"minutes": 20, "cost": 30, "label": "Lot 폐기 처리"}
+  }
+}
