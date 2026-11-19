@@ -31,6 +31,7 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     log('산화로 공정 로그 조회','incident-log','furnace',inspectLog(state,field));return state;}
   if(action.type==='incident-meeting'){
     if(state.incident?.phase!=='hold')throw new Error('HOLD 중에만 긴급 회의를 열 수 있습니다.');
+    if(state.incident.mode==='no-ai')throw new Error('이번 실험에서는 긴급 회의를 쓰지 않습니다.');
     const meeting={...validateMeetingAction(action),at:now};state.incident.meetings=[...(state.incident.meetings??[]),meeting];state.incident.minutes+=ADVISOR.meetingMinutes;
     log('긴급 부서 회의','incident-meeting','metrology',{kind:'incident-meeting',...meeting});return state;}
   if(action.type==='incident-diagnose'){diagnose(state,action,now);log('원인 판정','incident-diagnosis','metrology',{kind:'incident-diagnosis',cause:action.cause,disposition:action.disposition,...state.incident.evaluation});return state;}

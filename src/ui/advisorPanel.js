@@ -17,6 +17,7 @@ function meetingCard(m){
 }
 export function advisorSection(state){
   const inc=state.incident,meetings=inc.meetings??[],p=provider(),key=hasKey();
+  if(inc.mode==='no-ai')return `<section class="advisor"><h4>긴급 부서 회의</h4><p class="muted">이번 퀘스트는 실험 조건 "AI 회의 없이 혼자 해결"이라 회의를 쓰지 않아요.</p></section>`;
   return `<section class="advisor"><h4>긴급 부서 회의</h4><p class="muted">PE·EE·계측 엔지니어가 지금까지 확인한 증거만 보고 의견을 내요. 숨은 원인은 모르고, 판정은 내가 해요. 회의 1회 ${A.meetingMinutes}분.</p>
   <form id="meeting-form"><label>질문 (선택)<input name="question" maxlength="${A.maxTextLength}" placeholder="예: 기준 시료가 정상이면 다음엔 뭘 봐야 해?"></label><div class="tool-actions"><button class="primary" name="mode" value="ai" ${key?'':'disabled'}>AI 회의 소집 · ${LABEL[p]}</button><button class="secondary" name="mode" value="rules">규칙 기반 회의</button></div><p id="meeting-status" class="muted" role="status">${key?`모델: ${esc(modelOf(p))}`:'AI 회의를 쓰려면 아래 설정에서 API 키를 입력하세요.'}</p></form>
   ${meetings.slice().reverse().map(meetingCard).join('')}

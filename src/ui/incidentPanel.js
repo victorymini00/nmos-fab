@@ -1,6 +1,7 @@
 import {CAUSES,DISPOSITIONS,EVIDENCE_LABELS} from '../systems/incidents.js';
 import {INCIDENT as I} from '../constants.js';
 import {advisorSection,meetingSummary} from './advisorPanel.js';
+import {toCsv,summarize} from '../systems/experiment.js';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n=v=>Number(v).toFixed(1);
 const lastOf=(state,id)=>[...state.records].reverse().find(r=>r.operationId===id);
@@ -19,8 +20,8 @@ export function incidentSection(state){
     <form id="diagnose-form" class="diagnose"><fieldset><legend>원인 판정</legend>${Object.entries(CAUSES).map(([k,c])=>`<label class="check"><input type="radio" name="cause" value="${k}" required><span><strong>${c.label}</strong> · ${c.detail}</span></label>`).join('')}</fieldset><fieldset><legend>조치</legend>${Object.entries(DISPOSITIONS).map(([k,d])=>`<label class="check"><input type="radio" name="disposition" value="${k}" required>${d}</label>`).join('')}</fieldset><button class="primary">판정 제출 (한 번만 채점)</button></form>${advisorSection(state)}</section>`;
   const e=inc.evaluation,truth=CAUSES[inc.cause];
   const next=inc.disposition==='remeasure'?'계측 장비를 교정한 뒤 다시 측정해서 합격하면 서명하세요.':inc.disposition==='use-as-is'?'측정값이 규격 밖이어도 특채 확인 체크 후 서명할 수 있어요.':'이 Lot은 폐기했어요. Runsheet에서 새 Lot을 시작하세요.';
-  return `<section class="incident resolved">${head}<div class="incident-score"><strong>${e.score}</strong><span>/ 100</span></div><p>실제 원인: <strong>${truth.label}</strong> · ${truth.detail}</p><ul class="evidence"><li class="${e.causeOk?'done':'miss'}">원인 판정 ${e.causeOk?'정답':`오답 (선택: ${CAUSES[inc.diagnosis].label})`}</li><li class="${e.bestDisposition?'done':e.dispositionOk?'':'miss'}">조치 ${e.bestDisposition?'최선':e.dispositionOk?'가능하지만 비용이 큼':'부적절'}</li><li class="${e.keyEvidenceFound?'done':'miss'}">핵심 증거(${EVIDENCE_LABELS[e.keyEvidence]}) ${e.keyEvidenceFound?'확인함':'확인 안 함'}</li><li>조사 시간 ${e.minutes}분</li><li>긴급 회의 ${e.meetings??0}회 (AI ${e.aiMeetings??0}회)</li></ul><p>${next}</p>${meetingSummary(state)}
-    <details><summary>조치 변경</summary><form id="disposition-form">${Object.entries(DISPOSITIONS).map(([k,d])=>`<label class="check"><input type="radio" name="disposition" value="${k}" ${k===inc.disposition?'checked':''}>${d}</label>`).join('')}<button class="secondary">조치 변경 (점수는 그대로)</button></form></details>${inc.disposition==='scrap'?'<button id="new-incident-lot" class="secondary">퀘스트로 새 Lot 다시 시작</button>':''}</section>`;
+  return `<section class="incident resolved">${head}<div class="incident-score"><strong>${e.score}</strong><span>/ 100</span></div><p>실제 원인: <strong>${truth.label}</strong> · ${truth.detail}</p><ul class="evidence"><li class="${e.causeOk?'done':'miss'}">원인 판정 ${e.causeOk?'정답':`오답 (선택: ${CAUSES[inc.diagnosis].label})`}</li><li class="${e.bestDisposition?'done':e.dispositionOk?'':'miss'}">조치 ${e.bestDisposition?'최선':e.dispositionOk?'가능하지만 비용이 큼':'부적절'}</li><li class="${e.keyEvidenceFound?'done':'miss'}">핵심 증거(${EVIDENCE_LABELS[e.keyEvidence]}) ${e.keyEvidenceFound?'확인함':'확인 안 함'}</li><li>조사 시간 ${e.minutes}분</li><li>실험 조건 ${inc.mode==='no-ai'?'AI 미사용':'AI 회의 사용'}${inc.participant?` · ${esc(inc.participant)}`:''} · 긴급 회의 ${e.meetings??0}회 (AI ${e.aiMeetings??0}회)</li></ul><p>${next}</p>${meetingSummary(state)}
+    <details><summary>조치 변경</summary><form id="disposition-form">${Object.entries(DISPOSITIONS).map(([k,d])=>`<label class="check"><input type="radio" name="disposition" value="${k}" ${k===inc.disposition?'checked':''}>${d}</label>`).join('')}<button class="secondary">조치 변경 (점수는 그대로)</button></form></details>${inc.disposition==='scrap'?'<p>퀘스트로 새 Lot을 다시 시작하려면 Runsheet(R)의 퀘스트 시작 폼을 쓰세요.</p>':''}</section>`;
 }
 export function furnaceLogSection(state){
   const inc=state.incident;if(!inc||!['hold','resolved'].includes(inc.phase))return '';
@@ -39,4 +40,32 @@ export function bindIncident(content,{global,act,newIncidentLot}){
   content.querySelector('#diagnose-form')?.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.currentTarget);global({type:'incident-diagnose',cause:d.get('cause'),disposition:d.get('disposition')});});
   content.querySelector('#disposition-form')?.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.currentTarget);global({type:'incident-disposition',disposition:d.get('disposition')});});
   content.querySelector('#new-incident-lot')?.addEventListener('click',newIncidentLot);
+}
+
+// 퀘스트 시작 폼: 실험 조건(AI 회의 사용 여부)과 참가자 코드
+export function questStartForm(){
+  return `<form id="quest-start" class="quest-start-form"><label>참가자 코드 (선택, 실명 대신 P01 같은 코드)<input name="participant" maxlength="20" placeholder="P01"></label>
+  <fieldset><legend>실험 조건</legend><label class="check"><input type="radio" name="mode" value="ai" checked>AI 긴급 회의 사용</label><label class="check"><input type="radio" name="mode" value="no-ai">AI 회의 없이 혼자 해결</label></fieldset>
+  <details><summary>진행자 설정 (참가자에게 보여주지 마세요)</summary><label>숨은 원인<select name="cause"><option value="">무작위</option><option value="bias">A 계측기 편향</option><option value="overrun">B 산화로 과성장</option><option value="local">C 국부 두께 이상</option></select></label></details>
+  <button class="primary">퀘스트로 새 Lot 시작</button></form>`;
+}
+export function readQuestStart(form){const d=new FormData(form);return {participant:String(d.get('participant')||''),mode:d.get('mode')==='no-ai'?'no-ai':'ai',cause:d.get('cause')||undefined};}
+const LOG='nmos-fab-experiment-log';
+export function readExperimentLog(){try{const v=JSON.parse(localStorage.getItem(LOG)??'[]');return Array.isArray(v)?v:[];}catch{return [];}}
+export function appendExperimentLog(row){if(!row)return;try{const rows=readExperimentLog();rows.push(row);localStorage.setItem(LOG,JSON.stringify(rows.slice(-500)));}catch{}}
+const pct=v=>v===null?'—':(v*100).toFixed(0)+'%',num=(v,d=1)=>v===null?'—':v.toFixed(d);
+export function experimentPanel(){
+  const rows=readExperimentLog(),s=summarize(rows);
+  return `<section class="process-card experiment"><h3>실험 기록 (AI 회의 사용 vs 미사용)</h3><p class="muted">퀘스트 판정이 끝날 때마다 이 브라우저에 자동으로 쌓여요. 참가자 코드만 저장하고 실명은 넣지 마세요.</p>
+  <table class="mini-table"><thead><tr><th>조건</th><th>건수</th><th>원인 정답률</th><th>평균 점수</th><th>평균 조사 시간(게임 분)</th><th>평균 실제 소요(초)</th></tr></thead><tbody>${[['AI 회의 사용',s.ai],['AI 미사용',s.noAi]].map(([l,g])=>`<tr><td>${l}</td><td>${g.n}</td><td>${pct(g.accuracy)}</td><td>${num(g.score)}</td><td>${num(g.minutes)}</td><td>${num(g.wallSeconds,0)}</td></tr>`).join('')}</tbody></table>
+  <p class="muted">표본이 적으면 차이를 효과로 단정할 수 없어요. 같은 참가자가 조건을 바꿔 두 번 할 때는 원인도 바꿔야 학습 효과가 섞이지 않아요.</p>
+  <div class="tool-actions"><button type="button" id="experiment-csv" class="secondary" ${rows.length?'':'disabled'}>CSV 내려받기 (${rows.length}건)</button><button type="button" id="experiment-clear" class="secondary" ${rows.length?'':'disabled'}>기록 비우기</button></div><p id="experiment-status" class="muted" role="status"></p></section>`;
+}
+export function bindExperiment(content,rerender){
+  content.querySelector('#experiment-csv')?.addEventListener('click',()=>{
+    const blob=new Blob(['\ufeff'+toCsv(readExperimentLog())],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download='nmos-fab-experiment.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);});
+  const clear=content.querySelector('#experiment-clear');
+  clear?.addEventListener('click',()=>{if(clear.dataset.armed){try{localStorage.removeItem(LOG);}catch{}rerender();return;}
+    clear.dataset.armed='1';clear.textContent='한 번 더 누르면 모든 기록 삭제';content.querySelector('#experiment-status').textContent='CSV를 먼저 내려받았는지 확인하세요.';});
 }

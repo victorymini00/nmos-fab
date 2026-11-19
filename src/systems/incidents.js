@@ -20,7 +20,8 @@ export function startIncident(state,action,now){
   if(state.incident)throw new Error('이 Lot에서는 이미 퀘스트가 진행 중입니다.');
   if(state.records.some(r=>r.operationId===FIELD))throw new Error('Field 산화 전에만 퀘스트를 시작할 수 있습니다. 새 Lot에서 시작하세요.');
   const keys=Object.keys(CAUSES),cause=keys.includes(action.cause)?action.cause:keys[hash(`${state.lotId}|${now}`)%keys.length];
-  state.incident={id:'INCIDENT-001',title:'누가 산화막을 망쳤을까?',cause,phase:'armed',faultApplied:false,startedAt:now,evidence:[],minutes:0,alarm:null,diagnosis:null,disposition:null,evaluation:null};
+  const mode=action.mode==='no-ai'?'no-ai':'ai',participant=String(action.participant??'').trim().slice(0,20);
+  state.incident={id:'INCIDENT-001',title:'누가 산화막을 망쳤을까?',mode,participant,cause,phase:'armed',faultApplied:false,startedAt:now,evidence:[],minutes:0,alarm:null,diagnosis:null,disposition:null,evaluation:null};
 }
 // Field 산화 첫 실행 시 장비 고장을 결과에 반영합니다. growth(minutes)는 산화 모델 호출 함수.
 export function applyOxidationFault(state,op,input,growth){

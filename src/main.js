@@ -8,7 +8,8 @@ import {createPersistence} from './systems/storage.js';
 import {bindAlignment} from './ui/alignment.js';
 import {bindDeposition} from './ui/fabricationPanels.js';
 import {bindMetrology,bindToolActions} from './ui/metrologyPanel.js';
-import {bindIncident} from './ui/incidentPanel.js';
+import {bindIncident,questStartForm,experimentPanel,bindExperiment,readQuestStart,appendExperimentLog} from './ui/incidentPanel.js';
+import {experimentRow} from './systems/experiment.js';
 import {bindAdvisor} from './ui/advisorPanel.js';
 import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js';
 import {bindReportExport} from './ui/reportExport.js';
@@ -60,9 +61,10 @@ function renderView(){
     bindReportExport(ui.content,state,flow,layout);
   }else if(view.type==='runsheet'){
     ui.show('Lot 공정 지시서','RUNSHEET / NMOS-001',true);
-    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><button id="new-incident-lot" class="primary">돌발 상황 퀘스트로 새 Lot 시작</button>`:runsheetPanel(state,flow,layout);
+    ui.content.innerHTML=signedElectrical(state)?`${exportToolbar(state)}<p>최종 ${state.electrical.grade} 등급 / ${state.electrical.score}점 · 전체 ${state.records.length}개 기록</p>${reportTable(state,flow,layout)}<details><summary>새 Lot 시작</summary><p>현재 Lot을 초기화하고 세정부터 시작합니다.</p><button id="new-lot" class="secondary">새 Lot 시작</button></details><section class="incident armed"><div class="incident-head"><span>FAB INCIDENT · 001</span><strong>돌발 상황 퀘스트</strong></div>${questStartForm()}</section>${experimentPanel()}`:runsheetPanel(state,flow,layout);
     bindReportExport(ui.content,state,flow,layout);
-    ui.content.querySelector('#new-incident-lot')?.addEventListener('click',newIncidentLot);
+    ui.content.querySelector('#quest-start')?.addEventListener('submit',e=>{e.preventDefault();newIncidentLot(readQuestStart(e.currentTarget));});
+    bindExperiment(ui.content,renderView);
     ui.content.querySelector('#new-lot')?.addEventListener('click',()=>{
       state=createLot();ui.saved(persistence.reset());world?.reset();refresh();renderView();ui.message('새 Lot을 시작합니다. 이전 Lot 기록을 초기화했습니다.');
     });
@@ -80,11 +82,11 @@ function perform(action){
 }
 // 장비 근처가 아니어도 되는 동작(퀘스트 시작·HOLD·판정)
 function global(action){
-  try{const at=new Date().toISOString();state=applyAction(state,flow,action,at);ui.saved(persistence.record(action,at));refresh();renderView();}
+  try{const at=new Date().toISOString();state=applyAction(state,flow,action,at);ui.saved(persistence.record(action,at));if(action.type==='incident-diagnose')appendExperimentLog(experimentRow(state));refresh();renderView();}
   catch(error){const el=ui.content.querySelector('#action-error');if(el)el.textContent=error.message;else ui.message(error.message);}
 }
-function newIncidentLot(){
-  state=createLot();ui.saved(persistence.reset());world?.reset();global({type:'start-incident'});
+function newIncidentLot(options={}){
+  state=createLot();ui.saved(persistence.reset());world?.reset();global({type:'start-incident',...options});
   ui.message('돌발 상황 퀘스트를 시작했어요. 평소처럼 공정을 진행하세요.');
 }
 function interact(){if(ui.isOpen)return;const e=world?.getNearby();if(e)open('equipment',e);}
