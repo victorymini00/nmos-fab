@@ -44,3 +44,21 @@ test('meetings are recorded in state, cost time, only during HOLD, count in eval
   let t=go(createLot(),{type:'start-incident',cause:'bias'});p.record({type:'start-incident',cause:'bias'},at);
   assert.deepEqual(createPersistence(store,flow).load().state,t);
 });
+import {callGemini,listGeminiModels} from '../src/systems/advisor.js';
+test('Gemini call: key only in header, system prompt + JSON mode, parses candidate text, skips thought parts',async()=>{
+  const p=buildEvidencePacket(held('overrun'));let seen;
+  const reply=JSON.stringify({opinions:['PE','EE','MET'].map(role=>({role,hypothesis:'h',basis:['M1'],next:'n',confidence:'medium'})),summary:'s'});
+  const ok=async(url,init)=>{seen={url,init};return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:'생각 중',thought:true},{text:reply}]},finishReason:'STOP'}]})};};
+  const m=await callGemini(p,{apiKey:'AIza-test',model:'models/gemini-test-flash',fetchFn:ok});
+  assert.equal(m.opinions[0].basis[0],'M1');assert.match(seen.url,/\/models\/gemini-test-flash:generateContent$/);
+  assert.equal(seen.init.headers['x-goog-api-key'],'AIza-test');assert.ok(!seen.url.includes('AIza')&&!seen.init.body.includes('AIza'));
+  const body=JSON.parse(seen.init.body);assert.equal(body.systemInstruction.parts[0].text,SYSTEM_PROMPT);assert.equal(body.generationConfig.responseMimeType,'application/json');
+  await assert.rejects(callGemini(p,{apiKey:'x',model:'bad/../name',fetchFn:ok}),/모델 이름/);
+  await assert.rejects(callGemini(p,{apiKey:'x',fetchFn:async()=>({ok:false,status:429,json:async()=>({error:{message:'quota exceeded'}})})}),/quota/);
+  await assert.rejects(callGemini(p,{apiKey:'x',fetchFn:async()=>({ok:true,json:async()=>({promptFeedback:{blockReason:'SAFETY'}})})}),/SAFETY/);
+});
+test('Gemini model list keeps generateContent models, follows pages, flash first',async()=>{
+  const pages=[{models:[{name:'models/embed-1',supportedGenerationMethods:['embedContent']},{name:'models/gemini-x-pro',supportedGenerationMethods:['generateContent']}],nextPageToken:'p2'},{models:[{name:'models/gemini-x-flash',supportedGenerationMethods:['generateContent']}]}];
+  let i=0;const list=await listGeminiModels('k',async()=>({ok:true,json:async()=>pages[i++]}));
+  assert.deepEqual(list,['gemini-x-flash','gemini-x-pro']);
+});

@@ -34,7 +34,9 @@ HOLD 중 퀘스트 화면의 "긴급 부서 회의"에서 PE(공정)·EE(설비)
 
 - AI에 넘기는 것은 플레이어가 확인한 증거뿐입니다(측정값, 기준 시료, 산화로 로그, 교정 기록, 질문). 숨은 원인·장비 숨은 상태·실제 두께는 넘기지 않으며, 테스트로 세 원인 모두 누출이 없음을 확인합니다(`systems/advisor.js`의 `buildEvidencePacket`).
 - AI는 각 의견마다 근거 증거 id(M1, R1, L1, C1)를 대야 합니다. 존재하지 않는 id는 제거해 화면에 표시하고, 근거가 없으면 확신도를 "근거 부족"으로 낮춥니다. 판정과 채점은 게임 엔진이 합니다.
-- AI 회의: 본인 Claude API 키를 "AI 설정"에 입력하면 이 브라우저에서 Anthropic API를 직접 호출합니다(`anthropic-dangerous-direct-browser-access` 헤더, 기본 모델 `claude-haiku-5-5`, 설정에서 변경 가능). 키는 이 브라우저의 localStorage에만 저장되고 코드·GitHub·게임 저장 데이터에는 들어가지 않습니다. 본인 PC에서만 쓰고, Anthropic 콘솔에서 월 사용 한도를 걸어두세요.
+- AI 회의(기본: Gemini API 무료 등급): Google AI Studio에서 만든 API 키를 "AI 설정"에 입력하면 이 브라우저에서 Gemini API를 직접 호출합니다(`x-goog-api-key` 헤더, JSON 응답 모드). 결제 계정을 연결하지 않으면 과금되지 않으며, 무료 등급 입력은 Google 제품 개선에 쓰일 수 있습니다(게임은 가상 측정값만 보냄). 무료 등급에서 열린 모델은 계정마다 다를 수 있어 "모델 목록 불러오기"로 이 키에서 쓸 수 있는 모델을 불러와 고릅니다(기본값 `gemini-3.7-flash`).
+- 선택: 제공사를 Claude로 바꾸면 본인 Claude API 키로 호출합니다(`anthropic-dangerous-direct-browser-access` 헤더, 유료).
+- 키는 이 브라우저의 localStorage에만 저장되고 코드·GitHub·게임 저장 데이터에는 들어가지 않습니다. 본인 PC에서만 쓰세요. 배포 주소(github.io)에서 두 API 모두 브라우저 직접 호출이 허용되는 것을 확인했습니다.
 - 규칙 기반 회의: 키가 없거나 AI 호출이 실패하면 같은 형식의 규칙 기반 의견으로 대체하고, 실패 사유를 표시합니다.
 - 회의 결과는 Lot 상태에 기록되어 Runsheet·보고서에 남고, 저장을 불러올 때 AI를 다시 부르지 않습니다. 퀘스트 평가에 회의 횟수(AI/규칙)가 기록되어 AI 사용 여부별 비교 실험에 쓸 수 있습니다.
 

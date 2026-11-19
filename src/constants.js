@@ -146,6 +146,9 @@ export const INCIDENT = Object.freeze({
 
 // AI 부서 회의(돌발 상황 HOLD 중). 사용자 본인 API 키를 브라우저에서 직접 사용(BYOK).
 export const ADVISOR = Object.freeze({
+  // 기본 제공사: Gemini API 무료 등급(결제 계정 미연결 시 과금 없음). 무료 등급 입력은 Google 제품 개선에 쓰일 수 있음.
+  defaultProvider: 'gemini', geminiModel: 'gemini-3.7-flash', geminiBase: 'https://generativelanguage.googleapis.com/v1beta',
+  geminiMaxTokens: 4096,
   defaultModel: 'claude-haiku-5-5', maxTokens: 1200, meetingMinutes: 5,
   apiUrl: 'https://api.anthropic.com/v1/messages', apiVersion: '2023-06-01',
   maxTextLength: 400, roles: ['PE', 'EE', 'MET']

@@ -70,3 +70,30 @@ export function validateMeetingAction(action){
   return {source:action.source,model:action.source==='ai'?clip(action.model):null,question:clip(action.question),summary:clip(action.summary),fallbackReason:action.fallbackReason?clip(action.fallbackReason):null,
     opinions:action.opinions.map(o=>({role:A.roles.includes(o.role)?o.role:'PE',hypothesis:clip(o.hypothesis),basis:(o.basis??[]).slice(0,8).map(clip),inventedBasis:(o.inventedBasis??[]).slice(0,8).map(clip),next:clip(o.next),confidence:['low','medium','high'].includes(o.confidence)?o.confidence:'low'}))};
 }
+
+// Gemini API(무료 등급 가능). 키는 헤더로만 보내고 URL·본문에는 넣지 않습니다.
+export async function callGemini(packet,{apiKey,model=A.geminiModel,fetchFn=globalThis.fetch}){
+  const id=String(model).replace(/^models\//,'');
+  if(!/^[A-Za-z0-9._-]+$/.test(id))throw new Error('모델 이름 형식이 올바르지 않습니다.');
+  const res=await fetchFn(`${A.geminiBase}/models/${id}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':apiKey},
+    body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM_PROMPT}]},contents:[{role:'user',parts:[{text:`증거 패킷:\n${JSON.stringify(packet)}`}]}],
+      generationConfig:{responseMimeType:'application/json',maxOutputTokens:A.geminiMaxTokens,temperature:.4}})});
+  const body=await res.json().catch(()=>null);
+  if(!res.ok)throw new Error(body?.error?.message??`API 오류 (${res.status})`);
+  const cand=body?.candidates?.[0];
+  if(!cand)throw new Error(body?.promptFeedback?.blockReason?`응답 차단: ${body.promptFeedback.blockReason}`:'AI 응답이 비어 있습니다.');
+  const text=(cand.content?.parts??[]).filter(p=>typeof p.text==='string'&&!p.thought).map(p=>p.text).join('');
+  if(!text)throw new Error(`AI 응답이 비어 있습니다 (${cand.finishReason??'알 수 없음'}).`);
+  return sanitizeMeeting(text,packet);
+}
+// 이 키로 쓸 수 있는 텍스트 생성 모델 목록(무료 등급에서 열린 모델 확인용)
+export async function listGeminiModels(apiKey,fetchFn=globalThis.fetch){
+  const out=[];let token='';
+  for(let page=0;page<5;page++){
+    const res=await fetchFn(`${A.geminiBase}/models?pageSize=100${token?`&pageToken=${encodeURIComponent(token)}`:''}`,{headers:{'x-goog-api-key':apiKey}});
+    const body=await res.json().catch(()=>null);if(!res.ok)throw new Error(body?.error?.message??`API 오류 (${res.status})`);
+    for(const m of body.models??[])if((m.supportedGenerationMethods??[]).includes('generateContent'))out.push(String(m.name).replace(/^models\//,''));
+    token=body.nextPageToken;if(!token)break;
+  }
+  return out.sort((a,b)=>(/flash/.test(b)-/flash/.test(a))||b.localeCompare(a));
+}
