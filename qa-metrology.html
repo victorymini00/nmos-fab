@@ -6,6 +6,7 @@ import {createUI} from '/src/ui/panels.js';
 import {equipmentPanel} from '/src/ui/processPanels.js';
 import {bindMetrology,bindToolActions} from '/src/ui/metrologyPanel.js';
 import {bindIncident} from '/src/ui/incidentPanel.js';
+import {bindAdvisor} from '/src/ui/advisorPanel.js';
 import {applyAction,createLot,currentTask,latestRecord,recommendedEtchMinutes,recommendedPatternEtchMinutes} from '/src/systems/runsheet.js';
 // 검증용: 지정 스테이지까지 기준 조건으로 자동 진행한 뒤 계측 화면을 엽니다.
 const at=()=>new Date().toISOString();
@@ -14,7 +15,7 @@ function until(stage,s=createLot()){while(currentTask(s,flow).stage.number<stage
 let state;const noop=()=>{};const ui=createUI(document.querySelector('#app'),layout,{onInteract:noop,onClose:noop,onReset:noop,onRunsheet:noop,onSection:noop,onGuide:noop});
 const metrology=layout.equipment.find(e=>e.id==='metrology'),furnace=layout.equipment.find(e=>e.id==='furnace');let view=metrology;
 function act(a){try{state=applyAction(state,flow,{...a,equipmentId:a.type==='inspect-log'?'furnace':'metrology'},at());render();}catch(e){ui.content.querySelector('#action-error').textContent=e.message;}}
-function render(){ui.show(view.name,'QA',true);ui.content.innerHTML=equipmentPanel(view,state,flow);bindMetrology(ui.content,act);bindToolActions(ui.content,act);bindIncident(ui.content,{global:act,act,newIncidentLot:()=>{}});
+function render(){ui.show(view.name,'QA',true);ui.content.innerHTML=equipmentPanel(view,state,flow);bindMetrology(ui.content,act);bindToolActions(ui.content,act);bindIncident(ui.content,{global:act,act,newIncidentLot:()=>{}});bindAdvisor(ui.content,{global:act,getState:()=>state,rerender:render});
   ui.content.querySelector('#sign-form')?.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.currentTarget);act({type:'sign',name:d.get('signature'),acknowledgeDefects:d.get('acknowledge')==='on'});});}
 function oxide(){let s=until(1);state=applyAction(s,flow,{type:'execute',equipmentId:'furnace',input:input(s,currentTask(s,flow).operation)},at());render();}
 function poly(){let s=until(5);const op=currentTask(s,flow).operation;state=applyAction(s,flow,{type:'execute',equipmentId:'deposition',input:{...input(s,op),zoneSpreadC:15}},at());render();}

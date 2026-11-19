@@ -63,7 +63,7 @@ export function diagnose(state,action,now){
   const evidenceScore=inc.evidence.includes(needed)?I.evidencePoints:0;
   const minutePenalty=Math.max(0,inc.minutes-I.freeInvestigationMinutes)*I.minutePenalty;
   const score=Math.max(0,Math.round((causeOk?I.causePoints:0)+(best?I.dispositionPoints:ok?I.dispositionPoints/2:0)+evidenceScore-minutePenalty));
-  inc.evaluation={causeOk,dispositionOk:ok,bestDisposition:best,keyEvidence:needed,keyEvidenceFound:evidenceScore>0,minutes:inc.minutes,score};
+  inc.evaluation={meetings:inc.meetings?.length??0,aiMeetings:(inc.meetings??[]).filter(m=>m.source==='ai').length,causeOk,dispositionOk:ok,bestDisposition:best,keyEvidence:needed,keyEvidenceFound:evidenceScore>0,minutes:inc.minutes,score};
 }
 export function changeDisposition(state,disposition){const inc=state.incident;if(inc?.phase!=='resolved')throw new Error('먼저 원인을 판정하세요.');if(!DISPOSITIONS[disposition])throw new Error('조치를 선택하세요.');inc.disposition=disposition;}
 // 서명 규칙: 경고 상태에서는 서명 불가, 특채 판정이면 불합격이어도 결함 인지 서명 가능.

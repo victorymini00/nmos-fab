@@ -4,7 +4,8 @@ import {coatResist,alignmentResult,developResist,etchOxide} from './lithography.
 import {depositFilm,implantPhosphorus,annealImplant,etchPattern} from './fabrication.js';
 import {buildReferenceLot,testElectrical} from './electrical.js';
 import {createMetrologyState,isThicknessOperation,measureSites,checkReference,calibrate} from './metrology.js';
-import {DEPOSITION as D} from '../constants.js';
+import {DEPOSITION as D,ADVISOR} from '../constants.js';
+import {validateMeetingAction} from './advisor.js';
 import {startIncident,applyOxidationFault,afterMeasurement,holdLot,onReferenceCheck,inspectLog,diagnose,changeDisposition,signGate} from './incidents.js';
 export function createLot(){return {version:STORAGE.version,lotId:'NMOS-001',cursor:0,oxideNm:C.initialOxideNm,activeOxideNm:C.initialOxideNm,fieldOxideNm:C.initialOxideNm,gateOxideNm:null,screenOxideNm:null,films:{},geometry:{},patterns:{},implant:null,anneal:null,contacts:null,electrical:null,prNm:0,photo:null,etch:null,penaltyPoints:0,reworkCount:0,cleaned:false,records:[],nextRecord:1,metrology:createMetrologyState(),incident:null};}
 export function operations(flow){return flow.stages.flatMap(stage=>stage.operations.map(operation=>({stage,operation})));}
@@ -28,6 +29,10 @@ export function applyAction(previous,flow,action,now=new Date().toISOString()) {
     if(action.equipmentId!=='furnace')throw new Error('산화로에서 공정 로그를 조회하세요.');
     const field=[...state.records].reverse().find(r=>r.operationId==='field-oxidation'&&!r.superseded);
     log('산화로 공정 로그 조회','incident-log','furnace',inspectLog(state,field));return state;}
+  if(action.type==='incident-meeting'){
+    if(state.incident?.phase!=='hold')throw new Error('HOLD 중에만 긴급 회의를 열 수 있습니다.');
+    const meeting={...validateMeetingAction(action),at:now};state.incident.meetings=[...(state.incident.meetings??[]),meeting];state.incident.minutes+=ADVISOR.meetingMinutes;
+    log('긴급 부서 회의','incident-meeting','metrology',{kind:'incident-meeting',...meeting});return state;}
   if(action.type==='incident-diagnose'){diagnose(state,action,now);log('원인 판정','incident-diagnosis','metrology',{kind:'incident-diagnosis',cause:action.cause,disposition:action.disposition,...state.incident.evaluation});return state;}
   if(action.type==='incident-disposition'){changeDisposition(state,action.disposition);log('조치 변경','incident-disposition','metrology',{kind:'incident-disposition',disposition:action.disposition});return state;}
   if(action.type==='check-reference'||action.type==='calibrate'){

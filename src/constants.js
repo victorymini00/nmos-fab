@@ -143,3 +143,10 @@ export const INCIDENT = Object.freeze({
   // 평가 배점
   causePoints: 60, dispositionPoints: 20, evidencePoints: 20, freeInvestigationMinutes: 20, minutePenalty: .5
 });
+
+// AI 부서 회의(돌발 상황 HOLD 중). 사용자 본인 API 키를 브라우저에서 직접 사용(BYOK).
+export const ADVISOR = Object.freeze({
+  defaultModel: 'claude-haiku-5-5', maxTokens: 1200, meetingMinutes: 5,
+  apiUrl: 'https://api.anthropic.com/v1/messages', apiVersion: '2023-06-01',
+  maxTextLength: 400, roles: ['PE', 'EE', 'MET']
+});

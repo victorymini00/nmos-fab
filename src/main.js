@@ -9,6 +9,7 @@ import {bindAlignment} from './ui/alignment.js';
 import {bindDeposition} from './ui/fabricationPanels.js';
 import {bindMetrology,bindToolActions} from './ui/metrologyPanel.js';
 import {bindIncident} from './ui/incidentPanel.js';
+import {bindAdvisor} from './ui/advisorPanel.js';
 import {electricalPanel,exportToolbar,reportTable} from './ui/electricalPanel.js';
 import {bindReportExport} from './ui/reportExport.js';
 import {signedElectrical} from './systems/report.js';
@@ -49,6 +50,7 @@ function renderView(){
     else ui.content.querySelector('#measure')?.addEventListener('click',()=>act({type:'measure'}));
     bindToolActions(ui.content,act);
     bindIncident(ui.content,{global,act,newIncidentLot});
+    bindAdvisor(ui.content,{global,getState:()=>state,rerender:renderView});
     bindAlignment(ui.content);
     const operation=currentTask(state,flow)?.operation;
     if(operation?.modelId==='deposit')bindDeposition(ui.content,state,operation);
